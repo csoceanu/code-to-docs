@@ -20,6 +20,16 @@ inputs:
     description: 'Simulate changes without writing files or pushing PR'
     required: false
     default: 'false'
+  pr-number:
+    description: 'Pull request number'
+    required: false
+  pr-base:
+    description: 'Base branch for PR comparison (e.g. origin/main)'
+    required: false
+    default: 'origin/main'
+  pr-head-sha:
+    description: 'Head reference/SHA for the PR'
+    required: false
 
 outputs:
   status:
@@ -37,3 +47,6 @@ runs:
     DOCS_REPO_URL: ${{ inputs.docs-repo-url }}
     GH_TOKEN: ${{ inputs.github-token }}
     DRY_RUN: ${{ inputs.dry-run }}
+    PR_NUMBER: ${{ inputs.pr-number }}
+    PR_BASE: ${{ inputs.pr-base }}
+    PR_HEAD_SHA: ${{ inputs.pr-head-sha }}
