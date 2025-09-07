@@ -20,6 +20,22 @@ def get_diff():
     print(f"Getting diff for PR #{pr_number} against base: {pr_base}")
     print(f"Using PR head: {pr_head}")
     
+    # Debug: Check git references available
+    refs_result = subprocess.run(["git", "branch", "-a"], capture_output=True, text=True)
+    print(f"Available git branches: {refs_result.stdout.strip()}")
+    
+    # Debug: Check current HEAD
+    head_result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
+    if head_result.returncode == 0:
+        print(f"Current HEAD: {head_result.stdout.strip()}")
+    
+    # Debug: Check if pr_head exists
+    head_check = subprocess.run(["git", "rev-parse", pr_head], capture_output=True, text=True)
+    if head_check.returncode == 0:
+        print(f"PR head '{pr_head}' resolves to: {head_check.stdout.strip()}")
+    else:
+        print(f"PR head '{pr_head}' not found: {head_check.stderr.strip()}")
+    
     # Get the merge-base to ensure we capture all PR changes
     merge_base_result = subprocess.run(
         ["git", "merge-base", pr_base, pr_head], 
