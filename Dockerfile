@@ -3,11 +3,8 @@ FROM registry.access.redhat.com/ubi9/python-311:latest
 # Switch to root user for package installation
 USER root
 
-# Install system dependencies
-RUN dnf update -y && dnf install -y \
-    git \
-    curl \
-    && dnf clean all
+# Install system dependencies (git and curl-minimal already included in base image)
+RUN dnf update -y && dnf clean all
 
 # Install GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/rpm/gh-cli.repo | tee /etc/yum.repos.d/github-cli.repo \
