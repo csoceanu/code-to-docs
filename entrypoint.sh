@@ -6,6 +6,10 @@ echo "🚀 Starting Upstream Documentation Enhancer GitHub Action"
 # Fix Git ownership issue in Docker container
 git config --global --add safe.directory /github/workspace
 
+# Configure Git user for commits
+git config --global user.email "docbot@github-action.com"
+git config --global user.name "Documentation Enhancer Bot"
+
 # Setup environment variables for GitHub Actions context
 # PR info is now passed as inputs from the workflow (already set as env vars)
 # Just ensure they're exported if they exist
