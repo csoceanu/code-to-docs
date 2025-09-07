@@ -15,12 +15,14 @@ def get_diff():
     # First, try to get PR base from environment (set by GitHub Actions)
     pr_base = os.environ.get("PR_BASE", "origin/main")
     pr_number = os.environ.get("PR_NUMBER", "unknown")
+    pr_head = os.environ.get("PR_HEAD_SHA", "HEAD")  # Use PR_HEAD_SHA if available
     
     print(f"Getting diff for PR #{pr_number} against base: {pr_base}")
+    print(f"Using PR head: {pr_head}")
     
     # Get the merge-base to ensure we capture all PR changes
     merge_base_result = subprocess.run(
-        ["git", "merge-base", pr_base, "HEAD"], 
+        ["git", "merge-base", pr_base, pr_head], 
         capture_output=True, text=True
     )
     
@@ -31,7 +33,7 @@ def get_diff():
         
         # Show which files changed in the entire PR
         files_result = subprocess.run(
-            ["git", "diff", "--name-only", f"{merge_base}...HEAD"], 
+            ["git", "diff", "--name-only", f"{merge_base}...{pr_head}"], 
             capture_output=True, text=True
         )
         if files_result.returncode == 0:
@@ -40,18 +42,18 @@ def get_diff():
             print(f"Files changed in entire PR: {changed_files}")
         
         result = subprocess.run(
-            ["git", "diff", f"{merge_base}...HEAD"], 
+            ["git", "diff", f"{merge_base}...{pr_head}"], 
             capture_output=True, text=True
         )
-        diff_method = f"merge-base ({merge_base[:7]}...HEAD)"
+        diff_method = f"merge-base ({merge_base[:7]}...{pr_head})"
     else:
         # Fallback to the original method
         print("Warning: Could not find merge-base, using fallback diff method")
         result = subprocess.run(
-            ["git", "diff", f"{pr_base}...HEAD"], 
+            ["git", "diff", f"{pr_base}...{pr_head}"], 
             capture_output=True, text=True
         )
-        diff_method = f"direct ({pr_base}...HEAD)"
+        diff_method = f"direct ({pr_base}...{pr_head})"
     
     diff_content = result.stdout.strip()
     print(f"Diff method: {diff_method}")
