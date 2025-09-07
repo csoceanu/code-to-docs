@@ -44,7 +44,7 @@ echo ""
 echo "🎯 Running documentation enhancer with args: $ARGS"
 
 # Run the documentation enhancer
-if python suggest_docs.py $ARGS; then
+if python /app/suggest_docs.py $ARGS; then
   echo "✅ Documentation enhancer completed successfully"
   
   # Set GitHub Actions outputs (if result data is available)
