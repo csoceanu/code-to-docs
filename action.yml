@@ -1,0 +1,39 @@
+name: 'Upstream Documentation Enhancer'
+description: 'AI-powered documentation enhancer that automatically updates docs based on code changes'
+author: 'Your Name'
+
+branding:
+  icon: 'book'
+  color: 'blue'
+
+inputs:
+  gemini-api-key:
+    description: 'Gemini API key for AI-powered analysis'
+    required: true
+  docs-repo-url:
+    description: 'URL of the documentation repository'
+    required: true
+  github-token:
+    description: 'GitHub token for creating PRs'
+    required: true
+  dry-run:
+    description: 'Simulate changes without writing files or pushing PR'
+    required: false
+    default: 'false'
+
+outputs:
+  status:
+    description: 'Status of the documentation enhancement'
+  modified-files:
+    description: 'JSON array of modified files'
+  pr-created:
+    description: 'Whether a PR was created'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+    DOCS_REPO_URL: ${{ inputs.docs-repo-url }}
+    GH_TOKEN: ${{ inputs.github-token }}
+    DRY_RUN: ${{ inputs.dry-run }}

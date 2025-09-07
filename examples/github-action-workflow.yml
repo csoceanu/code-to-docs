@@ -1,0 +1,39 @@
+# Example GitHub Actions workflow for automatic documentation updates
+# Save this as .github/workflows/docs-enhancer.yml in your repository
+
+name: Auto-Update Documentation
+
+on:
+  # Trigger when someone comments '[update-docs]' on a PR
+  issue_comment:
+    types: [created]
+  
+  # Or trigger on PR events (optional)
+  # pull_request:
+  #   types: [opened, synchronize]
+
+jobs:
+  update-docs:
+    # Only run on PR comments containing the trigger phrase
+    if: |
+      github.event.issue.pull_request && 
+      contains(github.event.comment.body, '[update-docs]')
+    
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0  # Fetch full history for proper diff
+          
+      - name: Update Documentation
+        uses: your-username/upstream-docs-enhancer@v1
+        with:
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          docs-repo-url: ${{ secrets.DOCS_REPO_URL }}
+          github-token: ${{ secrets.GH_TOKEN }}
+          # Optional: dry run mode
+          # dry-run: 'true'
