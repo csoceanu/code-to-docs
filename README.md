@@ -60,9 +60,9 @@ Go to your repository Settings → Secrets and variables → Actions:
 
 | Secret Name | Description | Example |
 |-------------|-------------|---------|
-| `GEMINI_API_KEY` | Your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) | `AIz...` |
+| `GEMINI_API_KEY` | Your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) | `****` |
 | `DOCS_REPO_URL` | URL of your documentation repository | `https://github.com/org/docs` |
-| `GH_TOKEN` | GitHub Personal Access Token with `repo` + `pull_requests:write` permissions | `ghp_...` |
+| `GH_TOKEN` | GitHub Personal Access Token with `repo` + `pull_requests:write` permissions | `****` |
 
 ### Step 3: That's It!
 
