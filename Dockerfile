@@ -6,9 +6,9 @@ USER root
 # Install system dependencies (git and curl-minimal already included in base image)
 RUN dnf update -y && dnf clean all
 
-# Install GitHub CLI
+# Install GitHub CLI and jq for JSON parsing
 RUN curl -fsSL https://cli.github.com/packages/rpm/gh-cli.repo | tee /etc/yum.repos.d/github-cli.repo \
-    && dnf install -y gh
+    && dnf install -y gh jq
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -U google-genai

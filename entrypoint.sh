@@ -4,7 +4,14 @@ set -e
 echo "🚀 Starting Upstream Documentation Enhancer GitHub Action"
 
 # Setup environment variables for GitHub Actions context
-export PR_NUMBER="${GITHUB_EVENT_NUMBER}"
+# For issue_comment events (commenting on PR), get PR number from event payload
+if [ -n "$GITHUB_EVENT_PATH" ] && [ -f "$GITHUB_EVENT_PATH" ]; then
+  export PR_NUMBER=$(jq -r '.issue.number // .pull_request.number // empty' "$GITHUB_EVENT_PATH")
+else
+  export PR_NUMBER=""
+fi
+
+# Set PR base branch
 export PR_BASE="${GITHUB_BASE_REF:-origin/main}"
 
 # Validate required inputs
