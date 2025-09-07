@@ -11,7 +11,7 @@ RUN curl -fsSL https://cli.github.com/packages/rpm/gh-cli.repo | tee /etc/yum.re
     && dnf install -y gh
 
 # Install Python dependencies
-RUN pip install --no-cache-dir google-generativeai>=0.8.0
+RUN pip install --no-cache-dir -U google-genai
 
 # Set up working directory
 WORKDIR /app
