@@ -1,5 +1,8 @@
 FROM registry.access.redhat.com/ubi9/python-311:latest
 
+# Switch to root user for package installation
+USER root
+
 # Install system dependencies
 RUN dnf update -y && dnf install -y \
     git \
