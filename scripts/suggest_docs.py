@@ -330,18 +330,7 @@ def main():
         return
         
     # Filter out documentation tooling changes to avoid self-documentation
-    original_diff_size = len(diff)
     diff = filter_documentation_tools_from_diff(diff)
-    filtered_diff_size = len(diff)
-    
-    print(f"=== DIFF FILTERING DEBUG ===")
-    print(f"Original diff size: {original_diff_size} characters")
-    print(f"Filtered diff size: {filtered_diff_size} characters")
-    print(f"Filtered out: {original_diff_size - filtered_diff_size} characters")
-    print(f"=== FULL FILTERED DIFF BEING SENT TO GEMINI ===")
-    print(diff)
-    print(f"=== END FILTERED DIFF ===")
-    
     if not diff.strip():
         print("No changes to document (docs-enhancer.yml filtered out).")
         return

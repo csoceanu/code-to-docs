@@ -16,26 +16,56 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
 jobs:
   update-docs:
+    runs-on: ubuntu-latest
     if: |
       github.event.issue.pull_request && 
       contains(github.event.comment.body, '[update-docs]')
-    runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR branch
+      - name: Get PR information
+        id: pr_info
+        if: github.event.issue.pull_request
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.issue.number }}
+          echo "Extracting PR information for PR #$PR_NUMBER"
+          PR_DATA=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER)
+          
+          HEAD_REF=$(echo "$PR_DATA" | jq -r '.head.ref')
+          HEAD_REPO=$(echo "$PR_DATA" | jq -r '.head.repo.full_name')
+          BASE_REF=$(echo "$PR_DATA" | jq -r '.base.ref')
+          
+          echo "head_ref=$HEAD_REF" >> $GITHUB_OUTPUT
+          echo "head_repo=$HEAD_REPO" >> $GITHUB_OUTPUT
+          echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          
+          echo "PR info extracted: #$PR_NUMBER, base: $BASE_REF, head: $HEAD_REF"
+
+      - name: Checkout PR Code
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_TOKEN }}
-          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ steps.pr_info.outputs.head_repo || github.repository }}
+          ref: ${{ steps.pr_info.outputs.head_ref || github.ref }}
           fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN }}
           
       - name: Update Documentation
-        uses: csoceanu/code-to-docs@v1.0.0
+        uses: csoceanu/code-to-docs@v1.0.12
         with:
           gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
           docs-repo-url: ${{ secrets.DOCS_REPO_URL }}
           github-token: ${{ secrets.GH_TOKEN }}
+          pr-number: ${{ github.event.issue.number }}
+          pr-base: origin/${{ steps.pr_info.outputs.base_ref || 'main' }}
+          pr-head-sha: ${{ steps.pr_info.outputs.head_ref }}
 ```
 
 **Then just comment `[update-docs]` on any Pull Request to trigger automatic documentation updates!**
@@ -75,6 +105,9 @@ Comment `[update-docs]` on any PR to automatically update documentation.
 | `gemini-api-key` | ✅ | - | Gemini API key for AI analysis |
 | `docs-repo-url` | ✅ | - | URL of documentation repository |
 | `github-token` | ✅ | - | GitHub token for creating PRs |
+| `pr-number` | ✅ | - | Pull request number to analyze |
+| `pr-base` | ❌ | `origin/main` | Base branch for PR comparison |
+| `pr-head-sha` | ✅ | - | PR head branch/SHA for checkout |
 | `dry-run` | ❌ | `false` | Preview changes without creating PR |
 
 ## 📊 Action Outputs
