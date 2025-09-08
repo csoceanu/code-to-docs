@@ -191,6 +191,29 @@ Based on the diff, which files from this list should be updated? Return only the
     
     return filtered_files
 
+def filter_documentation_tools_from_diff(diff):
+    """Remove docs-enhancer.yml from the diff to avoid self-documentation"""
+    lines = diff.split('\n')
+    filtered_lines = []
+    skip_file = False
+    
+    for line in lines:
+        # Check if we're starting a new file section
+        if line.startswith('diff --git'):
+            # Check if this is the docs-enhancer.yml file
+            skip_file = '.github/workflows/docs-enhancer.yml' in line
+            if not skip_file:
+                filtered_lines.append(line)
+        elif line.startswith('+++') or line.startswith('---'):
+            # File path lines - only include if we're not skipping this file
+            if not skip_file:
+                filtered_lines.append(line)
+        elif not skip_file:
+            # Content lines - only include if we're not skipping this file
+            filtered_lines.append(line)
+    
+    return '\n'.join(filtered_lines)
+
 def load_full_content(file_path):
     try:
         return Path(file_path).read_text(encoding="utf-8")
@@ -304,6 +327,12 @@ def main():
     diff = get_diff()
     if not diff:
         print("No changes detected.")
+        return
+        
+    # Filter out documentation tooling changes to avoid self-documentation
+    diff = filter_documentation_tools_from_diff(diff)
+    if not diff.strip():
+        print("No changes to document (docs-enhancer.yml filtered out).")
         return
     # Get commit info before switching to docs repo
     commit_info = get_commit_info()
