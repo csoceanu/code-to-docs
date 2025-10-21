@@ -58,7 +58,7 @@ jobs:
           token: ${{ secrets.GH_TOKEN }}
           
       - name: Update Documentation
-        uses: csoceanu/code-to-docs@v1.0.13
+        uses: csoceanu/code-to-docs@v1.1.0
         with:
           gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
           docs-repo-url: ${{ secrets.DOCS_REPO_URL }}
