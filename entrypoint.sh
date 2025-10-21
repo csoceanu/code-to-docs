@@ -27,6 +27,10 @@ if [ -n "$PR_HEAD_SHA" ]; then
   export PR_HEAD_SHA="$PR_HEAD_SHA"
 fi
 
+if [ -n "$DOCS_SUBFOLDER" ]; then
+  export DOCS_SUBFOLDER="$DOCS_SUBFOLDER"
+fi
+
 # Validate required inputs
 if [ -z "$GEMINI_API_KEY" ]; then
   echo "❌ Error: gemini-api-key input is required"

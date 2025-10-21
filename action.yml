@@ -30,6 +30,10 @@ inputs:
   pr-head-sha:
     description: 'Head reference/SHA for the PR'
     required: false
+  docs-subfolder:
+    description: 'Optional: relative path to docs subfolder within the same repository (e.g., "docs", "content/docs")'
+    required: false
+    default: ''
 
 outputs:
   status:
@@ -45,6 +49,7 @@ runs:
   env:
     GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
     DOCS_REPO_URL: ${{ inputs.docs-repo-url }}
+    DOCS_SUBFOLDER: ${{ inputs.docs-subfolder }}
     GH_TOKEN: ${{ inputs.github-token }}
     DRY_RUN: ${{ inputs.dry-run }}
     PR_NUMBER: ${{ inputs.pr-number }}

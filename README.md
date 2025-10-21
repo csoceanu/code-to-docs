@@ -66,6 +66,7 @@ jobs:
           pr-number: ${{ github.event.issue.number }}
           pr-base: origin/${{ steps.pr_info.outputs.base_ref || 'main' }}
           pr-head-sha: ${{ steps.pr_info.outputs.head_ref }}
+          docs-subfolder: ${{ secrets.DOCS_SUBFOLDER }}  # Optional: for same-repo docs
 ```
 
 **Then just comment `[update-docs]` on any Pull Request to trigger automatic documentation updates!**
@@ -93,6 +94,7 @@ Go to your repository Settings → Secrets and variables → Actions:
 | `GEMINI_API_KEY` | Your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) | `****` |
 | `DOCS_REPO_URL` | URL of your documentation repository | `https://github.com/org/docs` |
 | `GH_TOKEN` | GitHub Personal Access Token with `repo` + `pull_requests:write` permissions | `****` |
+| `DOCS_SUBFOLDER` | _(Optional)_ Relative path to docs subfolder in same repo | `docs` or `content/docs` |
 
 ### Step 3: That's It!
 
@@ -108,6 +110,7 @@ Comment `[update-docs]` on any PR to automatically update documentation.
 | `pr-number` | ✅ | - | Pull request number to analyze |
 | `pr-base` | ❌ | `origin/main` | Base branch for PR comparison |
 | `pr-head-sha` | ✅ | - | PR head branch/SHA for checkout |
+| `docs-subfolder` | ❌ | `''` | Relative path to docs in same repo (e.g., `docs`) |
 | `dry-run` | ❌ | `false` | Preview changes without creating PR |
 
 ## 📊 Action Outputs
