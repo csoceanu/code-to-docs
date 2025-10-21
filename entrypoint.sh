@@ -61,9 +61,6 @@ echo "  BRANCH_NAME: ${BRANCH_NAME:-doc-update-from-pr}"
 echo "  DRY_RUN: ${DRY_RUN:-false}"
 echo "  DOCS_REPO_URL: $DOCS_REPO_URL"
 
-# Map GH_TOKEN to GH_PAT for the original script
-export GH_PAT="$GH_TOKEN"
-
 echo ""
 echo "🎯 Running documentation enhancer with args: $ARGS"
 

@@ -32,7 +32,7 @@ jobs:
         id: pr_info
         if: github.event.issue.pull_request
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           PR_NUMBER=${{ github.event.issue.number }}
           echo "Extracting PR information for PR #$PR_NUMBER"
@@ -55,14 +55,14 @@ jobs:
           repository: ${{ steps.pr_info.outputs.head_repo || github.repository }}
           ref: ${{ steps.pr_info.outputs.head_ref || github.ref }}
           fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GH_PAT }}
           
       - name: Update Documentation
         uses: csoceanu/code-to-docs@v1.1.0
         with:
           gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
           docs-repo-url: ${{ secrets.DOCS_REPO_URL }}
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ secrets.GH_PAT }}
           pr-number: ${{ github.event.issue.number }}
           pr-base: origin/${{ steps.pr_info.outputs.base_ref || 'main' }}
           pr-head-sha: ${{ steps.pr_info.outputs.head_ref }}
@@ -93,7 +93,7 @@ Go to your repository Settings → Secrets and variables → Actions:
 |-------------|-------------|---------|
 | `GEMINI_API_KEY` | Your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) | `****` |
 | `DOCS_REPO_URL` | URL of your documentation repository | `https://github.com/org/docs` |
-| `GH_TOKEN` | GitHub Personal Access Token with `repo` + `pull_requests:write` permissions | `****` |
+| `GH_PAT` | GitHub Personal Access Token with `repo` + `pull_requests:write` permissions | `****` |
 | `DOCS_SUBFOLDER` | _(Optional)_ Relative path to docs subfolder in same repo | `docs` or `content/docs` |
 
 ### Step 3: That's It!
