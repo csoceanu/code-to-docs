@@ -100,27 +100,6 @@ Go to your repository Settings → Secrets and variables → Actions:
 
 Comment `[update-docs]` on any PR to automatically update documentation.
 
-## 📋 Action Inputs
-
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `gemini-api-key` | ✅ | - | Gemini API key for AI analysis |
-| `docs-repo-url` | ✅ | - | URL of documentation repository |
-| `github-token` | ✅ | - | GitHub token for creating PRs |
-| `pr-number` | ✅ | - | Pull request number to analyze |
-| `pr-base` | ❌ | `origin/main` | Base branch for PR comparison |
-| `pr-head-sha` | ✅ | - | PR head branch/SHA for checkout |
-| `docs-subfolder` | ❌ | `''` | Relative path to docs in same repo (e.g., `docs`) |
-| `dry-run` | ❌ | `false` | Preview changes without creating PR |
-
-## 📊 Action Outputs
-
-| Output | Description |
-|--------|-------------|
-| `status` | Status of the documentation enhancement |
-| `modified-files` | JSON array of modified files |
-| `pr-created` | Whether a PR was created |
-
 ---
 
 **Ready to automate your documentation?** Just add the workflow file, set up secrets, and comment `[update-docs]` on PRs! 🚀
