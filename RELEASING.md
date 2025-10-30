@@ -62,6 +62,6 @@ git ls-remote --tags origin | grep v1
 ```
 
 Users can now use:
-- `csoceanu/code-to-docs@v1` (gets v1.2.0)
-- `csoceanu/code-to-docs@v1.2.0` (pinned to v1.2.0)
+- `redhat-community-ai-tools/code-to-docs@v1` (gets v1.2.0)
+- `redhat-community-ai-tools/code-to-docs@v1.2.0` (pinned to v1.2.0)
 
