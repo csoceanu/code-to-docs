@@ -223,7 +223,7 @@ Provide a detailed summary that would help an AI system understand when this fil
 """
     
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         contents=prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0)
@@ -240,7 +240,19 @@ def get_file_content_or_summaries(line_threshold=300):
     doc_files.extend(list(Path(".").rglob("*.adoc")))
     doc_files.extend(list(Path(".").rglob("*.md")))
     
+    # Deduplicate file paths BEFORE processing to avoid duplicate work
+    seen_paths = set()
+    unique_doc_files = []
     for path in doc_files:
+        path_str = str(path)
+        if path_str not in seen_paths:
+            seen_paths.add(path_str)
+            unique_doc_files.append(path)
+    
+    if len(unique_doc_files) != len(doc_files):
+        print(f"Removed {len(doc_files) - len(unique_doc_files)} duplicate file path(s)")
+    
+    for path in unique_doc_files:
         try:
             with open(path, encoding="utf-8") as f:
                 content = f.read()
@@ -303,7 +315,7 @@ def ask_gemini_for_relevant_files(diff, file_previews):
         """
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 thinking_config=types.ThinkingConfig(thinking_budget=0)
@@ -326,8 +338,19 @@ def ask_gemini_for_relevant_files(diff, file_previews):
         all_relevant_files.extend(filtered_files)
         print(f"Batch {batch_num}: Found {len(filtered_files)} relevant files")
     
-    print(f"Total relevant files found: {len(all_relevant_files)}")
-    return all_relevant_files
+    # Deduplicate while preserving order
+    seen = set()
+    unique_files = []
+    for f in all_relevant_files:
+        if f not in seen:
+            seen.add(f)
+            unique_files.append(f)
+    
+    if len(unique_files) != len(all_relevant_files):
+        print(f"Removed {len(all_relevant_files) - len(unique_files)} duplicate file(s)")
+    
+    print(f"Total relevant files found: {len(unique_files)}")
+    return unique_files
 
 def load_full_content(file_path):
     """
@@ -433,7 +456,7 @@ Return ONLY:
 
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         contents=prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0)
@@ -484,7 +507,7 @@ Be concise. Focus on what was ADDED or CHANGED. Return ONLY the explanation, no 
     
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 thinking_config=types.ThinkingConfig(thinking_budget=0)
