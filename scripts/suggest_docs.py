@@ -571,9 +571,9 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
         comment_parts.append("💡 **Next Steps**:")
         comment_parts.append("- Review the suggestions above")
         if not include_full_content:
-            comment_parts.append("- Comment `[update-docs]` to see full proposed changes and create a PR in the docs repository")
+            comment_parts.append("- To see full proposed changes and create a PR, comment with the update-docs command in brackets")
         else:
-            comment_parts.append("- Comment `[update-docs]` again to automatically create a PR with these changes in the docs repository")
+            comment_parts.append("- To create a PR with these changes, comment with the update-docs command in brackets")
         comment_parts.append("")
         comment_parts.append("*Powered by Gemini AI* ✨")
         
