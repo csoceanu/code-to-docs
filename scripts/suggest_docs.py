@@ -488,21 +488,25 @@ def overwrite_file(file_path, new_content):
 
 def generate_file_summary(file_path, original, updated):
     """Generate a summary for a single file's changes"""
-    prompt = f"""You are explaining a documentation change to developers who may not remember the docs well.
+    prompt = f"""You are explaining a PROPOSED documentation change to developers who may not remember the docs well.
 
 File: {file_path}
 
 ORIGINAL CONTENT:
 {original if original else "(new file)"}
 
-UPDATED CONTENT:
+PROPOSED UPDATED CONTENT:
 {updated}
 
 Write 1-2 sentences explaining:
 1. What this documentation file covers
-2. What specific changes were made (comparing original vs updated)
+2. What change you SUGGEST making (comparing original vs proposed)
 
-Be concise. Focus on what was ADDED or CHANGED. Return ONLY the explanation, no bullet points or file name.
+IMPORTANT: Write as a SUGGESTION, not as if the change is already done.
+Use phrases like "I suggest adding...", "The suggested update is to...", "I recommend updating..."
+NOT phrases like "The update adds...", "This change includes..."
+
+Be concise. Return ONLY the explanation, no bullet points or file name.
 """
     
     try:
