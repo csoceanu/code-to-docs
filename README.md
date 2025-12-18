@@ -84,6 +84,7 @@ jobs:
           pr-head-sha: ${{ steps.pr_info.outputs.head_ref }}
           docs-subfolder: ${{ secrets.DOCS_SUBFOLDER }}
           comment-body: ${{ github.event.comment.body }}
+          docs-base-branch: ${{ secrets.DOCS_BASE_BRANCH || 'main' }}
 ```
 
 ### 2. Configure Secrets
