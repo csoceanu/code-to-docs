@@ -704,6 +704,7 @@ def push_and_open_pr(modified_files, commit_info=None):
         run_command_safe(
             ["git", "config", "--unset-all", "http.https://github.com/.extraheader"],
             check=False,
+            capture_output=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
