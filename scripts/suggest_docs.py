@@ -670,7 +670,7 @@ def push_and_open_pr(modified_files, commit_info=None):
             "gh", "pr", "create",
             "--title", "Auto-Generated Doc Updates from Code PR",
             "--body", pr_body,
-            "--base", "master",
+            "--base", os.environ.get("DOCS_BASE_BRANCH", "main"),
             "--head", BRANCH_NAME
         ], check=True, env={**os.environ, "GH_TOKEN": gh_token})
         

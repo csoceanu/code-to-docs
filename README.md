@@ -96,6 +96,7 @@ Add these in **Settings → Secrets → Actions**:
 | `DOCS_REPO_URL` | Docs repository URL (e.g., `https://github.com/org/docs`) |
 | `GH_PAT` | GitHub token with `repo` + `pull_requests:write` permissions |
 | `DOCS_SUBFOLDER` | _(Optional)_ Docs subfolder path (e.g., `docs`) |
+| `DOCS_BASE_BRANCH` | _(Optional)_ Base branch for docs PRs (default: `main`) |
 
 ## Features
 
