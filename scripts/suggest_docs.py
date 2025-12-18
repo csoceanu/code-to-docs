@@ -498,15 +498,18 @@ ORIGINAL CONTENT:
 PROPOSED UPDATED CONTENT:
 {updated}
 
+FIRST: Compare the original and proposed content carefully.
+- If they are identical or nearly identical (no meaningful changes), return ONLY the word: SKIP
+- If there ARE meaningful changes, continue below.
+
 Write 1-2 sentences explaining:
 1. What this documentation file covers
 2. What change you SUGGEST making (comparing original vs proposed)
 
 IMPORTANT: Write as a SUGGESTION, not as if the change is already done.
 Use phrases like "I suggest adding...", "The suggested update is to...", "I recommend updating..."
-NOT phrases like "The update adds...", "This change includes..."
 
-Be concise. Return ONLY the explanation, no bullet points or file name.
+Be concise. Return ONLY the explanation (or SKIP if no changes).
 """
     
     try:
@@ -525,10 +528,11 @@ Be concise. Return ONLY the explanation, no bullet points or file name.
 def generate_summary_explanation(files_with_content):
     """Generate a plain-English summary of what documentation changes are proposed"""
     if not files_with_content:
-        return ""
+        return "", []
     
     # Generate summary for each file individually to avoid context overflow
     summaries = []
+    filtered_files = []
     for item in files_with_content:
         file_path = item[0]
         original = item[1] if len(item) > 2 else ""
@@ -536,10 +540,15 @@ def generate_summary_explanation(files_with_content):
         
         print(f"Generating summary for {file_path}...")
         summary = generate_file_summary(file_path, original, updated)
-        if summary:
+        
+        # Skip files where AI returned SKIP (no changes needed)
+        if summary and summary.strip().upper() != "SKIP":
             summaries.append(f"- **{file_path}**: {summary}")
+            filtered_files.append(item)
+        elif summary.strip().upper() == "SKIP":
+            print(f"Filtering out {file_path}: no changes needed")
     
-    return "\n".join(summaries) if summaries else ""
+    return "\n".join(summaries) if summaries else "", filtered_files
 
 def post_review_comment(files_with_content, pr_number, commit_info=None, include_full_content=True):
     """
@@ -570,37 +579,43 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
         comment_parts.append("✅ **No documentation updates needed** - all docs are up to date!")
         comment_body = "\n".join(comment_parts)
     else:
-        comment_parts.append(f"Found **{len(files_with_content)} file(s)** that may need updates:")
-        comment_parts.append("")
-        
-        # Generate plain-English summary
+        # Generate plain-English summary and filter out files with no real changes
         print("Generating summary explanation...")
-        summary = generate_summary_explanation(files_with_content)
-        if summary:
-            comment_parts.append("### 📋 Summary")
-            comment_parts.append("")
-            comment_parts.append(summary)
-            comment_parts.append("")
+        summary, filtered_files = generate_summary_explanation(files_with_content)
         
-        # Include full content only if requested (for [update-docs])
-        if include_full_content:
-            comment_parts.append("### 📄 Proposed Changes")
+        # Use filtered files (excludes files where AI said "no changes")
+        if not filtered_files:
+            comment_parts.append("✅ **No documentation updates needed** - all docs are up to date!")
+            comment_body = "\n".join(comment_parts)
+        else:
+            comment_parts.append(f"Found **{len(filtered_files)} file(s)** that may need updates:")
             comment_parts.append("")
             
-            for item in files_with_content:
-                file_path = item[0]
-                new_content = item[2] if len(item) > 2 else item[1]
-                comment_parts.append(f"#### 📄 `{file_path}`")
+            if summary:
+                comment_parts.append("### 📋 Summary")
                 comment_parts.append("")
-                comment_parts.append("<details>")
-                comment_parts.append(f"<summary><b>View full updated content</b></summary>")
+                comment_parts.append(summary)
                 comment_parts.append("")
-                comment_parts.append("```" + ("markdown" if file_path.endswith('.md') else "asciidoc"))
-                comment_parts.append(new_content)
-                comment_parts.append("```")
+            
+            # Include full content only if requested (for [update-docs])
+            if include_full_content:
+                comment_parts.append("### 📄 Proposed Changes")
                 comment_parts.append("")
-                comment_parts.append("</details>")
-                comment_parts.append("")
+                
+                for item in filtered_files:
+                    file_path = item[0]
+                    new_content = item[2] if len(item) > 2 else item[1]
+                    comment_parts.append(f"#### 📄 `{file_path}`")
+                    comment_parts.append("")
+                    comment_parts.append("<details>")
+                    comment_parts.append(f"<summary><b>View full updated content</b></summary>")
+                    comment_parts.append("")
+                    comment_parts.append("```" + ("markdown" if file_path.endswith('.md') else "asciidoc"))
+                    comment_parts.append(new_content)
+                    comment_parts.append("```")
+                    comment_parts.append("")
+                    comment_parts.append("</details>")
+                    comment_parts.append("")
         
         comment_parts.append("---")
         comment_parts.append("")
