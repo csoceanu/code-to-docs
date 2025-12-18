@@ -283,21 +283,22 @@ def ask_gemini_for_relevant_files(diff, file_previews):
         )
 
         prompt = f"""
-        You are a VERY STRICT documentation assistant. You must select ONLY the ABSOLUTE MINIMUM files.
+        You are an ULTRA-CONSERVATIVE documentation assistant. Select ONLY files that DIRECTLY document the EXACT code being changed.
 
-        A code change was made in this PR (Git diff):
+        Git diff from this PR:
         {diff}
 
-        Below is a list of documentation files (.adoc and .md) and their content:
-
+        Documentation files to evaluate:
         {context}
 
-        STRICT RULES - BE EXTREMELY CONSERVATIVE:
-        1. ONLY select command reference files if a command was added/modified
-        2. ONLY select feature-specific docs if that EXACT feature was changed
-        3. When in doubt, DO NOT select the file
+        STRICT SELECTION RULES:
+        1. ONLY select files that document the EXACT code being modified in the diff
+        2. DO NOT select files just because they mention related concepts
+        3. DO NOT select overview or index files unless absolutely necessary
+        4. Select the MINIMUM number of files necessary
+        5. When in doubt, DO NOT select the file
 
-        Based on the diff, which files from this list should be updated? Return only the file paths (one per line). No explanations or extra formatting.
+        Return ONLY file paths (one per line) that DIRECTLY match the code changes.
         If no files need updates, return "NONE".
         """
 
@@ -393,35 +394,41 @@ FORMATTING REQUIREMENTS:
         format_name = "the existing format"
 
     prompt = f"""
-You are a CONSERVATIVE documentation assistant. Only make changes if ABSOLUTELY necessary.
+You are an ULTRA-CONSERVATIVE documentation assistant. You MUST NOT hallucinate or invent information.
 
 {format_instructions}
 - Ensure consistent indentation and spacing
 
-A developer made the following code changes:
+Git diff showing the EXACT code changes:
 {diff}
 
-Here is the full content of the current documentation file `{file_path}`:
+Current documentation file `{file_path}`:
 --------------------
 {current_content}
 --------------------
 
-IMPORTANT RULES:
-1. First, verify the file's purpose matches the code changes. If the file is about a completely different feature, return `NO_UPDATE_NEEDED`
-2. Check if the file already covers the code changes adequately. Most files don't need updates.
-3. Only add information that is DIRECTLY related to the code changes shown
-4. DO NOT add tangential information just because it seems related
-5. DO NOT rewrite or restructure the file - only add/modify what's necessary
-6. Preserve all existing content, links, formatting, and structure
+CRITICAL RULES - READ CAREFULLY:
+1. ONLY add information that is EXPLICITLY visible in the diff above
+2. DO NOT add anything that is NOT in the diff
+3. DO NOT infer or guess what other changes might exist
+4. DO NOT add documentation for things you think SHOULD exist
+5. Keep changes MINIMAL - prefer small, targeted updates over rewrites
+6. Preserve ALL existing content, structure, and formatting
+7. If unsure whether something should be added, DO NOT add it
+
+STRICT VALIDATION:
+- Before adding ANY new text, verify it appears in the diff
+- If you cannot point to the exact line in the diff that justifies an addition, DO NOT add it
+- Most documentation files do NOT need updates - default to NO_UPDATE_NEEDED
 
 DECISION:
-- If the file is about a different topic than the code changes → `NO_UPDATE_NEEDED`
-- If the file already covers this information adequately → `NO_UPDATE_NEEDED`  
-- If truly new, important information is missing → Return updated file content
+- If the file documents a different command/feature than what's in the diff → `NO_UPDATE_NEEDED`
+- If the file already adequately covers what's in the diff → `NO_UPDATE_NEEDED`
+- If the diff adds something NEW that is missing from this file → Return MINIMAL updates only
 
 Return ONLY:
-- `NO_UPDATE_NEEDED` (if file doesn't need changes), OR
-- The complete updated file in valid {format_name} format (if changes are essential)
+- `NO_UPDATE_NEEDED` (strongly preferred if changes aren't essential), OR
+- The complete updated file with ONLY the minimal necessary changes
 """
 
 
