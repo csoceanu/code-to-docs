@@ -309,6 +309,7 @@ def ask_gemini_for_relevant_files(diff, file_previews):
         3. DO NOT select overview or index files unless absolutely necessary
         4. Select the MINIMUM number of files necessary
         5. When in doubt, DO NOT select the file
+        6. Prefer returning NONE over selecting uncertain files
 
         Return ONLY file paths (one per line) that DIRECTLY match the code changes.
         If no files need updates, return "NONE".
@@ -417,12 +418,12 @@ FORMATTING REQUIREMENTS:
         format_name = "the existing format"
 
     prompt = f"""
-You are an ULTRA-CONSERVATIVE documentation assistant. You MUST NOT hallucinate or invent information.
+You are updating documentation based on a code diff. Be EXTREMELY conservative.
 
 {format_instructions}
 - Ensure consistent indentation and spacing
 
-Git diff showing the EXACT code changes:
+Git diff:
 {diff}
 
 Current documentation file `{file_path}`:
@@ -430,24 +431,26 @@ Current documentation file `{file_path}`:
 {current_content}
 --------------------
 
-CRITICAL RULES - READ CAREFULLY:
-1. ONLY add information that is EXPLICITLY visible in the diff above
-2. DO NOT add anything that is NOT in the diff
-3. DO NOT infer or guess what other changes might exist
-4. DO NOT add documentation for things you think SHOULD exist
-5. Keep changes MINIMAL - prefer small, targeted updates over rewrites
-6. Preserve ALL existing content, structure, and formatting
-7. If unsure whether something should be added, DO NOT add it
+DECISION LOGIC:
+1. Does this file document the EXACT thing being changed in the diff?
+   - If NO → return `NO_UPDATE_NEEDED`
+   - If YES → continue
 
-STRICT VALIDATION:
-- Before adding ANY new text, verify it appears in the diff
-- If you cannot point to the exact line in the diff that justifies an addition, DO NOT add it
-- Most documentation files do NOT need updates - default to NO_UPDATE_NEEDED
+2. Does the diff add something NEW that should be documented?
+   - If NO → return `NO_UPDATE_NEEDED`  
+   - If YES → continue
 
-DECISION:
-- If the file documents a different command/feature than what's in the diff → `NO_UPDATE_NEEDED`
-- If the file already adequately covers what's in the diff → `NO_UPDATE_NEEDED`
-- If the diff adds something NEW that is missing from this file → Return MINIMAL updates only
+3. Is that new thing already documented in this file?
+   - If YES → return `NO_UPDATE_NEEDED`
+   - If NO → add ONLY that specific change
+
+WHAT YOU CAN ADD:
+- Only content that directly reflects what was added/changed in the diff
+
+WHAT YOU MUST NOT ADD:
+- New sections or paragraphs not justified by the diff
+- "Helpful" additions you think users might want
+- Restructured or rewritten content
 
 Return ONLY:
 - `NO_UPDATE_NEEDED` (strongly preferred if changes aren't essential), OR
