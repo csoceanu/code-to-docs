@@ -513,6 +513,7 @@ IMPORTANT: Write as a SUGGESTION, not as if the change is already done.
 Use phrases like "I suggest adding...", "The suggested update is to...", "I recommend updating..."
 
 Be concise. Return ONLY the explanation (or SKIP if no changes).
+Do NOT use line breaks - write as a single paragraph.
 """
     
     try:
@@ -523,7 +524,10 @@ Be concise. Return ONLY the explanation (or SKIP if no changes).
                 thinking_config=types.ThinkingConfig(thinking_budget=0)
             ),
         )
-        return response.text.strip()
+        # Clean up: replace newlines with spaces for consistent formatting
+        result = response.text.strip()
+        result = ' '.join(result.split())  # Collapse all whitespace to single spaces
+        return result
     except Exception as e:
         print(f"Warning: Could not generate summary for {file_path}: {sanitize_output(str(e))}")
         return ""
