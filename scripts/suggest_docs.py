@@ -730,18 +730,34 @@ def push_and_open_pr(modified_files, commit_info=None):
         pr_body += "\n".join([f"- `{f}`" for f in modified_files])
         pr_body += "\n\n*Note: Each commit in this PR contains references to the specific source code commits that triggered the documentation updates.*"
         
-        # Create PR using gh CLI
-        print("Creating pull request...")
-        result = run_command_safe([
-            "gh", "pr", "create",
-            "--title", "Auto-Generated Doc Updates from Code PR",
-            "--body", pr_body,
-            "--base", os.environ.get("DOCS_BASE_BRANCH", "main"),
-            "--head", BRANCH_NAME
-        ], check=True, env={**os.environ, "GH_TOKEN": gh_token})
+        # Check if PR already exists for this branch
+        print("Checking for existing pull request...")
+        check_pr = run_command_safe([
+            "gh", "pr", "list",
+            "--head", BRANCH_NAME,
+            "--state", "open",
+            "--json", "number"
+        ], check=False, env={**os.environ, "GH_TOKEN": gh_token})
         
-        if result.returncode == 0:
-            print("✅ Successfully created PR")
+        existing_pr = check_pr.stdout.strip() if check_pr.returncode == 0 else "[]"
+        
+        if existing_pr and existing_pr != "[]":
+            # PR exists - just update it (push already updated the branch)
+            print("✅ Existing PR found - branch updated with new changes")
+            print("   (The push already updated the PR with the latest commits)")
+        else:
+            # Create new PR
+            print("Creating pull request...")
+            result = run_command_safe([
+                "gh", "pr", "create",
+                "--title", "Auto-Generated Doc Updates from Code PR",
+                "--body", pr_body,
+                "--base", os.environ.get("DOCS_BASE_BRANCH", "main"),
+                "--head", BRANCH_NAME
+            ], check=True, env={**os.environ, "GH_TOKEN": gh_token})
+            
+            if result.returncode == 0:
+                print("✅ Successfully created PR")
             
     except subprocess.CalledProcessError as e:
         print(f"❌ Git operation failed: {sanitize_output(str(e))}")
