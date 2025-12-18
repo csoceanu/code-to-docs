@@ -463,35 +463,23 @@ def overwrite_file(file_path, new_content):
         print(f"Failed to write {file_path}: {sanitize_output(str(e))}")
         return False
 
-def generate_summary_explanation(files_with_content):
-    """Generate a plain-English summary of what documentation changes are needed"""
-    if not files_with_content:
-        return ""
-    
-    # Build context for Gemini
-    files_info = []
-    for file_path, new_content in files_with_content:
-        # Limit content length for the summary prompt
-        content_preview = new_content[:1000] if len(new_content) > 1000 else new_content
-        files_info.append(f"File: {file_path}\nContent preview:\n{content_preview}\n")
-    
-    context = "\n\n".join(files_info)
-    
-    prompt = f"""You are explaining documentation changes to developers who may not remember the docs well.
+def generate_file_summary(file_path, original, updated):
+    """Generate a summary for a single file's changes"""
+    prompt = f"""You are explaining a documentation change to developers who may not remember the docs well.
 
-Below are documentation files that need updates:
+File: {file_path}
 
-{context}
+ORIGINAL CONTENT:
+{original if original else "(new file)"}
 
-For each file, write 2-3 sentences explaining:
-1. What this file documents (briefly)
-2. What kind of changes are being made (e.g., "adding new command flags", "updating API endpoint", etc.)
+UPDATED CONTENT:
+{updated}
 
-Format as a bullet list with file name and explanation.
-Be concise and clear - developers should understand without reading the full docs.
+Write 1-2 sentences explaining:
+1. What this documentation file covers
+2. What specific changes were made (comparing original vs updated)
 
-Example format:
-- **path/to/file.adoc**: This file documents the admin CLI commands. Updates add documentation for the new `--force` flag and its usage.
+Be concise. Focus on what was ADDED or CHANGED. Return ONLY the explanation, no bullet points or file name.
 """
     
     try:
@@ -504,15 +492,34 @@ Example format:
         )
         return response.text.strip()
     except Exception as e:
-        print(f"Warning: Could not generate summary: {sanitize_output(str(e))}")
+        print(f"Warning: Could not generate summary for {file_path}: {sanitize_output(str(e))}")
         return ""
+
+def generate_summary_explanation(files_with_content):
+    """Generate a plain-English summary of what documentation changes are proposed"""
+    if not files_with_content:
+        return ""
+    
+    # Generate summary for each file individually to avoid context overflow
+    summaries = []
+    for item in files_with_content:
+        file_path = item[0]
+        original = item[1] if len(item) > 2 else ""
+        updated = item[2] if len(item) > 2 else item[1]
+        
+        print(f"Generating summary for {file_path}...")
+        summary = generate_file_summary(file_path, original, updated)
+        if summary:
+            summaries.append(f"- **{file_path}**: {summary}")
+    
+    return "\n".join(summaries) if summaries else ""
 
 def post_review_comment(files_with_content, pr_number, commit_info=None, include_full_content=True):
     """
     Post a review comment on the PR with documentation suggestions
     
     Args:
-        files_with_content: List of (file_path, content) tuples
+        files_with_content: List of (file_path, original, updated) tuples
         pr_number: PR number
         commit_info: Commit information dict
         include_full_content: If True, include full content; if False, only summary
@@ -553,7 +560,9 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
             comment_parts.append("### 📄 Proposed Changes")
             comment_parts.append("")
             
-            for file_path, new_content in files_with_content:
+            for item in files_with_content:
+                file_path = item[0]
+                new_content = item[2] if len(item) > 2 else item[1]
                 comment_parts.append(f"#### 📄 `{file_path}`")
                 comment_parts.append("")
                 comment_parts.append("<details>")
@@ -764,8 +773,8 @@ def main():
             print(f"No update needed for {file_path}")
             continue
 
-        # Store the updated content for review comment
-        files_with_content.append((file_path, updated))
+        # Store both original and updated content for review comment
+        files_with_content.append((file_path, current, updated))
 
         # Only write files if in update mode (not review-only mode)
         if update_mode and not args.dry_run:
