@@ -305,12 +305,18 @@ def ask_gemini_for_relevant_files(diff, file_previews):
         {context}
 
         STRICT SELECTION RULES:
-        1. ONLY select files that document the EXACT code being modified in the diff
-        2. DO NOT select files just because they mention related concepts
+        1. ONLY select files that document the EXACT code, module, or component being modified in the diff
+        2. DO NOT select files just because they mention related concepts or technologies
         3. DO NOT select overview or index files unless absolutely necessary
         4. Select the MINIMUM number of files necessary
         5. When in doubt, DO NOT select the file
         6. Prefer returning NONE over selecting uncertain files
+        
+        AVOID COMMON OVER-SELECTION MISTAKES:
+        7. If a doc file mentions the same technology (e.g., a library, tool, or protocol) but for a DIFFERENT component or purpose, DO NOT select it
+        8. If a doc file is about USER-CONFIGURED items (e.g., custom configs, user containers, plugins) but the code change is about INTERNAL/SYSTEM behavior, DO NOT select it
+        9. If a doc file is for a different subsystem that happens to share dependencies with the changed code, DO NOT select it
+        10. Release notes and changelogs should ONLY be selected if explicitly requested or if the change is a breaking change
 
         Return ONLY file paths (one per line) that DIRECTLY match the code changes.
         If no files need updates, return "NONE".
