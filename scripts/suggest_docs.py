@@ -235,10 +235,11 @@ Provide a detailed summary that would help an AI system understand when this fil
 def get_file_content_or_summaries(line_threshold=300):
     """Get file content - full content for short files, AI summaries for long files"""
     file_data = []
-    # Look for both .adoc and .md documentation files
+    # Look for .adoc, .md, and .rst documentation files
     doc_files = []
     doc_files.extend(list(Path(".").rglob("*.adoc")))
     doc_files.extend(list(Path(".").rglob("*.md")))
+    doc_files.extend(list(Path(".").rglob("*.rst")))
     
     # Deduplicate file paths BEFORE processing to avoid duplicate work
     seen_paths = set()
@@ -328,12 +329,12 @@ def ask_gemini_for_relevant_files(diff, file_previews):
             print(f"Batch {batch_num}: No relevant files found")
             continue
         
-        # Filter out source code files - only keep documentation files (.adoc and .md)
+        # Filter out source code files - only keep documentation files (.adoc, .md, and .rst)
         suggested_files = [line.strip() for line in result_text.splitlines() if line.strip()]
-        filtered_files = [f for f in suggested_files if f.endswith('.adoc') or f.endswith('.md')]
+        filtered_files = [f for f in suggested_files if f.endswith('.adoc') or f.endswith('.md') or f.endswith('.rst')]
         
         if len(filtered_files) != len(suggested_files):
-            skipped = [f for f in suggested_files if not (f.endswith('.adoc') or f.endswith('.md'))]
+            skipped = [f for f in suggested_files if not (f.endswith('.adoc') or f.endswith('.md') or f.endswith('.rst'))]
             print(f"Batch {batch_num}: Skipping non-documentation files: {skipped}")
         
         all_relevant_files.extend(filtered_files)
@@ -372,6 +373,7 @@ def ask_gemini_for_updated_content(diff, file_path, current_content):
     # Determine file format based on extension
     is_markdown = file_path.endswith('.md')
     is_asciidoc = file_path.endswith('.adoc')
+    is_rst = file_path.endswith('.rst')
     
     if is_markdown:
         format_instructions = """
@@ -407,6 +409,32 @@ CRITICAL FORMATTING REQUIREMENTS FOR ASCIIDOC FILES:
 - Keep all cross-references (xref) intact and properly formatted
 """
         format_name = "AsciiDoc"
+    elif is_rst:
+        format_instructions = """
+CRITICAL FORMATTING REQUIREMENTS FOR RESTRUCTUREDTEXT (.rst) FILES:
+**MOST IMPORTANT**: The output must be RAW RESTRUCTUREDTEXT content that can be written DIRECTLY to a .rst file.
+- NEVER wrap the output in code fences like ```rst or ``` or ```restructuredtext
+- The FIRST character of your response should be the FIRST character of the file
+- The LAST character of your response should be the LAST character of the file content
+- NO "```rst" or "```restructuredtext" at the beginning
+- NO "```" at the end
+- Return ONLY the raw file content, nothing else
+- Use ONLY reStructuredText syntax:
+  - Headers use underlines with =, -, ~, ^, " characters (matching or exceeding header text length)
+  - Code blocks use :: followed by indented content or .. code-block:: directive
+  - Links use `Link Text <URL>`_ or reference style with .. _name: URL
+  - Inline code uses double backticks ``code``
+  - Bold uses **text**, italic uses *text*
+  - Lists use - or * for bullets, #. or 1. for numbered
+  - Directives use .. directive:: format
+  - Tables can be grid style or simple style with = and - underlines
+- Do NOT mix Markdown or AsciiDoc syntax with reStructuredText
+- Maintain proper indentation (critical in RST)
+- Keep all cross-references (:ref:, :doc:, :class:, etc.) intact and properly formatted
+- Keep all Sphinx directives (.. toctree::, .. note::, .. warning::, etc.) intact
+- Preserve all role references (:ref:`label`, :doc:`path`, :class:`name`, etc.)
+"""
+        format_name = "reStructuredText"
     else:
         # Default to treating as text/markdown
         format_instructions = """
@@ -480,7 +508,7 @@ def overwrite_file(file_path, new_content):
         
         # Additional check: ensure it's a documentation file
         if not validate_docs_file_extension(file_path):
-            print(f"❌ Security: Only .adoc and .md files allowed: {file_path}")
+            print(f"❌ Security: Only .adoc, .md, and .rst files allowed: {file_path}")
             return False
         
         Path(file_path).write_text(new_content, encoding="utf-8")
@@ -617,7 +645,7 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
                     comment_parts.append("<details>")
                     comment_parts.append(f"<summary><b>View full updated content</b></summary>")
                     comment_parts.append("")
-                    comment_parts.append("```" + ("markdown" if file_path.endswith('.md') else "asciidoc"))
+                    comment_parts.append("```" + ("markdown" if file_path.endswith('.md') else "rst" if file_path.endswith('.rst') else "asciidoc"))
                     comment_parts.append(new_content)
                     comment_parts.append("```")
                     comment_parts.append("")

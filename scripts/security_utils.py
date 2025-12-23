@@ -160,9 +160,9 @@ def validate_docs_file_extension(file_path):
         file_path: Path to check
     
     Returns:
-        bool: True if .adoc or .md, False otherwise
+        bool: True if .adoc, .md, or .rst, False otherwise
     """
-    return file_path.endswith('.adoc') or file_path.endswith('.md')
+    return file_path.endswith('.adoc') or file_path.endswith('.md') or file_path.endswith('.rst')
 
 
 def validate_docs_subfolder(subfolder_path):
