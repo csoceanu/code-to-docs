@@ -614,7 +614,7 @@ def find_relevant_files_optimized(diff):
     return relevant_files
 
 
-def generate_updates_parallel(diff, relevant_files, max_workers=5, user_instructions=""):
+def generate_updates_parallel(diff, relevant_files, max_workers=5, user_instructions="", file_instructions=None):
     """
     Generate documentation updates in parallel.
 
@@ -622,7 +622,8 @@ def generate_updates_parallel(diff, relevant_files, max_workers=5, user_instruct
         diff: The code diff
         relevant_files: List of file paths to update
         max_workers: Maximum parallel threads
-        user_instructions: Optional reviewer instructions to pass to the AI
+        user_instructions: Optional global reviewer instructions to pass to the AI
+        file_instructions: Optional dict mapping filenames to per-file instructions
 
     Returns:
         list: List of (file_path, original_content, updated_content) tuples
@@ -636,7 +637,11 @@ def generate_updates_parallel(diff, relevant_files, max_workers=5, user_instruct
             return None
 
         print(f"Checking if {file_path} needs an update...")
-        updated = ask_gemini_for_updated_content(diff, file_path, current, user_instructions=user_instructions)
+        updated = ask_gemini_for_updated_content(
+            diff, file_path, current,
+            user_instructions=user_instructions,
+            file_instructions=file_instructions
+        )
         
         if updated.strip() == "NO_UPDATE_NEEDED":
             print(f"No update needed for {file_path}")
@@ -678,7 +683,7 @@ def load_full_content(file_path):
         print(f"Failed to read {file_path}: {sanitize_output(str(e))}")
         return ""
 
-def ask_gemini_for_updated_content(diff, file_path, current_content, user_instructions=""):
+def ask_gemini_for_updated_content(diff, file_path, current_content, user_instructions="", file_instructions=None):
     # Determine file format based on extension
     is_markdown = file_path.endswith('.md')
     is_asciidoc = file_path.endswith('.adoc')
@@ -794,12 +799,21 @@ Return ONLY:
 - The complete updated file with ONLY the minimal necessary changes
 """
 
+    # Build combined instructions from global + per-file
+    combined_instructions = []
     if user_instructions:
+        combined_instructions.append(f"Global: {user_instructions}")
+    if file_instructions:
+        per_file = _resolve_file_instructions(file_path, file_instructions)
+        if per_file:
+            combined_instructions.append(f"For this file specifically: {per_file}")
+
+    if combined_instructions:
         prompt += f"""
 
 ADDITIONAL INSTRUCTIONS FROM THE REVIEWER:
 The human reviewer has provided the following guidance. Follow these instructions carefully:
-{user_instructions}
+{chr(10).join(combined_instructions)}
 """
 
     response = client.models.generate_content(
@@ -906,6 +920,98 @@ def generate_summary_explanation(files_with_content, commit_info=None):
             print(f"Filtering out {file_path}: no changes needed")
     
     return "\n".join(summaries) if summaries else "", filtered_files
+
+def parse_update_instructions(comment_body):
+    """
+    Parse global and per-file instructions from an [update-docs] comment.
+
+    Supports two forms:
+      [update-docs] global instruction here
+      pools.rst: only update the set-quota usage line
+      health-checks.rst: don't modify existing sections
+
+    The first line after [update-docs] is the global instruction.
+    Subsequent lines matching "<filename>: <instruction>" are per-file.
+
+    Args:
+        comment_body: The full comment text
+
+    Returns:
+        tuple: (global_instructions: str, file_instructions: dict[str, str])
+    """
+    global_instructions = ""
+    file_instructions = {}
+
+    # Find [update-docs] and everything after it
+    match = re.search(r'\[update-docs\]\s*(.*)', comment_body, re.IGNORECASE | re.DOTALL)
+    if not match:
+        return global_instructions, file_instructions
+
+    after_command = match.group(1).strip()
+    if not after_command:
+        return global_instructions, file_instructions
+
+    lines = after_command.split('\n')
+
+    # First line is global instructions
+    global_instructions = lines[0].strip()
+
+    # Remaining lines: check for "filename: instruction" pattern
+    # Match lines where the part before ":" looks like a file path (contains . and ends with doc extension)
+    file_pattern = re.compile(
+        r'^([\w./_-]*\.(?:rst|md|adoc))\s*:\s*(.+)$',
+        re.IGNORECASE
+    )
+    for line in lines[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        file_match = file_pattern.match(line)
+        if file_match:
+            filename = file_match.group(1).strip()
+            instruction = file_match.group(2).strip()
+            file_instructions[filename] = instruction
+
+    if global_instructions:
+        print(f"Global instructions: {global_instructions}")
+    if file_instructions:
+        print(f"Per-file instructions: {file_instructions}")
+
+    return global_instructions, file_instructions
+
+
+def _resolve_file_instructions(file_path, file_instructions):
+    """
+    Find per-file instructions for a given file path.
+
+    Matches by exact path, basename, or path suffix to allow users to write
+    just 'pools.rst' instead of 'rados/operations/pools.rst'.
+
+    Args:
+        file_path: Full relative path (e.g. 'rados/operations/pools.rst')
+        file_instructions: Dict mapping filename patterns to instructions
+
+    Returns:
+        str: The matching instruction, or empty string if none
+    """
+    if not file_instructions:
+        return ""
+
+    basename = os.path.basename(file_path)
+
+    for pattern, instruction in file_instructions.items():
+        # Exact match
+        if pattern == file_path:
+            return instruction
+        # Basename match (e.g. 'pools.rst' matches 'rados/operations/pools.rst')
+        if pattern == basename:
+            return instruction
+        # Suffix match (e.g. 'operations/pools.rst' matches 'rados/operations/pools.rst')
+        if file_path.endswith('/' + pattern):
+            return instruction
+
+    return ""
+
 
 def parse_previous_review(pr_number):
     """
@@ -1088,7 +1194,9 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
             comment_parts.append("- When ready, comment `[\u200bupdate-docs]` to generate a PR with only the checked files")
         else:
             comment_parts.append("- When ready, comment `[\u200bupdate-docs]` to create a PR with only the checked files")
-        comment_parts.append("- You can add instructions after the command, e.g. `[\u200bupdate-docs] don't mention the deprecated flag`")
+        comment_parts.append("- You can add instructions in your `[\u200bupdate-docs]` comment:")
+        comment_parts.append("  - **Global** (first line): `[\u200bupdate-docs] keep changes minimal, don't add new sections`")
+        comment_parts.append("  - **Per-file** (next lines): `config-ref.rst: only update the CLI usage example`")
         comment_parts.append("")
         comment_parts.append("*Powered by Gemini AI* ✨")
         
@@ -1287,14 +1395,10 @@ def main():
     # === INTERACTIVE REVIEW: check for previous review when [update-docs] ===
     previous_review = None
     user_instructions = ""
+    file_instructions = {}
     if update_mode and not review_mode:
-        # Extract user instructions from the [update-docs] comment body
-        # e.g. "[update-docs] don't mention the deprecated flag"
-        instr_match = re.search(r'\[update-docs\]\s*(.+)', comment_body, re.IGNORECASE)
-        if instr_match:
-            user_instructions = instr_match.group(1).strip()
-            if user_instructions:
-                print(f"User instructions: {user_instructions}")
+        # Parse global and per-file instructions from the [update-docs] comment
+        user_instructions, file_instructions = parse_update_instructions(comment_body)
 
         print("Checking for previous interactive review comment...")
         previous_review = parse_previous_review(pr_number)
@@ -1366,7 +1470,8 @@ def main():
         # Parallel update generation
         print(f"Generating updates in parallel (max {args.max_workers} workers)...")
         files_with_content = generate_updates_parallel(
-            diff, relevant_files, max_workers=args.max_workers, user_instructions=user_instructions
+            diff, relevant_files, max_workers=args.max_workers,
+            user_instructions=user_instructions, file_instructions=file_instructions
         )
 
         # Write files if in update mode
@@ -1385,7 +1490,10 @@ def main():
                 continue
 
             print(f"Checking if {file_path} needs an update...")
-            updated = ask_gemini_for_updated_content(diff, file_path, current, user_instructions=user_instructions)
+            updated = ask_gemini_for_updated_content(
+                diff, file_path, current,
+                user_instructions=user_instructions, file_instructions=file_instructions
+            )
 
             if updated.strip() == "NO_UPDATE_NEEDED":
                 print(f"No update needed for {file_path}")
