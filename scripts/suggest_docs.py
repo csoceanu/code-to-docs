@@ -1085,10 +1085,10 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
         comment_parts.append("💡 **Next Steps**:")
         comment_parts.append("- **Uncheck** any files above that you don't want updated")
         if not include_full_content:
-            comment_parts.append("- When ready, comment `[update-docs]` to generate a PR with only the checked files")
+            comment_parts.append("- When ready, comment `[\u200bupdate-docs]` to generate a PR with only the checked files")
         else:
-            comment_parts.append("- When ready, comment `[update-docs]` to create a PR with only the checked files")
-        comment_parts.append("- You can add instructions after the command, e.g. `[update-docs] don't mention the deprecated flag`")
+            comment_parts.append("- When ready, comment `[\u200bupdate-docs]` to create a PR with only the checked files")
+        comment_parts.append("- You can add instructions after the command, e.g. `[\u200bupdate-docs] don't mention the deprecated flag`")
         comment_parts.append("")
         comment_parts.append("*Powered by Gemini AI* ✨")
         
