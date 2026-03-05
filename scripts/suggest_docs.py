@@ -953,24 +953,28 @@ def parse_update_instructions(comment_body):
 
     lines = after_command.split('\n')
 
-    # First line is global instructions
-    global_instructions = lines[0].strip()
-
-    # Remaining lines: check for "filename: instruction" pattern
-    # Match lines where the part before ":" looks like a file path (contains . and ends with doc extension)
+    # Match lines where the part before ":" looks like a doc file path
     file_pattern = re.compile(
         r'^([\w./_-]*\.(?:rst|md|adoc))\s*:\s*(.+)$',
         re.IGNORECASE
     )
+
+    # First line is global instructions, unless it matches the per-file pattern
+    first_line = lines[0].strip()
+    first_match = file_pattern.match(first_line)
+    if first_match:
+        file_instructions[first_match.group(1).strip()] = first_match.group(2).strip()
+    else:
+        global_instructions = first_line
+
+    # Remaining lines: check for per-file instructions
     for line in lines[1:]:
         line = line.strip()
         if not line:
             continue
         file_match = file_pattern.match(line)
         if file_match:
-            filename = file_match.group(1).strip()
-            instruction = file_match.group(2).strip()
-            file_instructions[filename] = instruction
+            file_instructions[file_match.group(1).strip()] = file_match.group(2).strip()
 
     if global_instructions:
         print(f"Global instructions: {global_instructions}")
