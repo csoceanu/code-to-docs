@@ -123,7 +123,7 @@ Any OpenAI-compatible API works. Common examples:
 
 | Backend | `MODEL_API_BASE` | `MODEL_NAME` |
 |---------|-----------------|--------------|
-| vLLM on OpenShift AI | `https://my-model.apps.cluster.example.com/v1` | `meta-llama/Llama-3.1-8B-Instruct` |
+| vLLM on OpenShift AI | `https://my-model-predictor-namespace.apps.cluster.example.com/v1` | Your InferenceService name (check `/v1/models`) |
 | Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-2.0-flash` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
 | Ollama | `http://localhost:11434/v1` | `llama3.1` |
