@@ -1399,8 +1399,12 @@ def main():
     update_mode = "[update-docs]" in comment_body.lower()
 
     if not review_mode and not update_mode:
-        # Fallback to update mode if no command detected (backward compatibility)
-        update_mode = True
+        if feature_mode:
+            # [review-feature] alone should behave like review mode (summary only, no PR)
+            review_mode = True
+        else:
+            # Fallback to update mode if no command detected (backward compatibility)
+            update_mode = True
 
     # Determine if we should use indexes
     use_index = args.use_index and not args.no_index
