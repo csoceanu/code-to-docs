@@ -202,13 +202,16 @@ def _find_all_links(text):
                 seen_gdoc_urls.add(url)
                 links["google_docs_urls"].append(url)
 
-    # Other URLs (skip already-matched ones)
+    # Other URLs (skip already-matched ones and known non-doc URLs)
     for match in re.finditer(r'https?://[^\s\)\]\"\'<>,]+', text):
         url = match.group(0)
         # Skip Confluence and Google Docs URLs already captured
         if any(p.search(url) for p in [GDOC_PATTERN, GSLIDES_PATTERN, GSHEETS_PATTERN]):
             continue
         if '/wiki/spaces/' in url or 'pageId=' in url:
+            continue
+        # Skip avatar/profile image URLs
+        if "gravatar.com" in url or "avatar" in url.lower():
             continue
         if url not in links["other_urls"]:
             links["other_urls"].append(url)
@@ -487,7 +490,7 @@ def format_feature_review_section(issue_key, summary, analysis, inaccessible_lin
     parts.append("")
     parts.append("---")
     parts.append("")
-    parts.append("## 🔍 Feature Coverage")
+    parts.append("## 🔍 Spec vs Code Analysis")
     parts.append("")
     parts.append(f"**Jira:** {ticket_link} — {summary}")
     parts.append("")
