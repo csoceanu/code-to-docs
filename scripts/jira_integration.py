@@ -111,14 +111,6 @@ def fetch_google_doc(url):
     output_file = f"gws-export-{doc_id[:8]}.txt"
 
     try:
-        # Debug: check gws availability
-        which_check = run_command_safe(["which", "gws"], check=False)
-        print(f"  gws path: {(which_check.stdout or '').strip()}")
-        version_check = run_command_safe(["gws", "--help"], check=False)
-        print(f"  gws help exit code: {version_check.returncode}")
-        print(f"  gws help stdout (first 100): {(version_check.stdout or '')[:100]}")
-        print(f"  gws help stderr (first 100): {(version_check.stderr or '')[:100]}")
-
         result = run_command_safe(
             [
                 "gws", "drive", "files", "export",
@@ -128,22 +120,12 @@ def fetch_google_doc(url):
             check=False,
         )
 
-        print(f"  gws exit code: {result.returncode}")
-        print(f"  gws output file exists: {os.path.exists(output_file)}")
-        print(f"  gws download.txt exists: {os.path.exists('download.txt')}")
-
         if result.returncode != 0:
             stderr = result.stderr or ""
-            # Log safe diagnostic hints (no credentials)
-            for hint in ["quota", "api", "enable", "disabled", "403", "404", "401"]:
-                if hint in stderr.lower():
-                    print(f"  gws error hint: contains '{hint}'")
             if "403" in stderr or "permission" in stderr.lower():
                 return "", "", "Permission denied — ensure the doc is shared with the service account"
             if "file not found" in stderr.lower() or f"not found: {doc_id}" in stderr.lower():
                 return "", "", "Document not found — ensure the doc is shared with the service account"
-            if "api" in stderr.lower() and ("enable" in stderr.lower() or "disabled" in stderr.lower()):
-                return "", "", "Google Drive API may not be enabled on the service account's project"
             return "", "", f"gws export failed (exit code {result.returncode})"
 
         # gws saves content to the output file

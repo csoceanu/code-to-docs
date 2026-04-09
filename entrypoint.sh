@@ -53,7 +53,7 @@ if [ -n "$GOOGLE_SA_KEY" ]; then
   printf '%s' "$GOOGLE_SA_KEY" > "$GWS_CREDS_FILE"
   chmod 600 "$GWS_CREDS_FILE"
   export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE="$GWS_CREDS_FILE"
-  echo "Google Workspace CLI credentials configured ($(wc -c < "$GWS_CREDS_FILE") bytes)"
+  echo "Google Workspace CLI credentials configured"
 fi
 
 # Validate required inputs
