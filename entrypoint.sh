@@ -50,7 +50,7 @@ fi
 if [ -n "$GOOGLE_SA_KEY" ]; then
   # Write service account JSON to temp file for gws CLI
   GWS_CREDS_FILE=$(mktemp /tmp/gws-sa-XXXXXX.json)
-  echo "$GOOGLE_SA_KEY" > "$GWS_CREDS_FILE"
+  printf '%s' "$GOOGLE_SA_KEY" > "$GWS_CREDS_FILE"
   chmod 600 "$GWS_CREDS_FILE"
   export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE="$GWS_CREDS_FILE"
   echo "Google Workspace CLI credentials configured"
