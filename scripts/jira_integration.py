@@ -10,6 +10,7 @@ import os
 import re
 import json
 import asyncio
+import shutil
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -64,8 +65,7 @@ def _is_gws_configured():
     if not os.environ.get("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"):
         return False
     # Check if gws is installed
-    result = run_command_safe(["which", "gws"], check=False)
-    return result.returncode == 0
+    return shutil.which("gws") is not None
 
 
 def _extract_google_doc_id(url):
