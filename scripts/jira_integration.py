@@ -106,6 +106,8 @@ def fetch_google_doc(url):
         mime_type = "text/plain"
 
     # gws only allows output within the current directory
+    print(f"  gws cwd: {os.getcwd()}")
+    print(f"  gws creds file exists: {os.path.exists(os.environ.get('GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE', ''))}")
     output_file = f"gws-export-{doc_id[:8]}.txt"
 
     try:
