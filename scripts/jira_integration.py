@@ -111,6 +111,10 @@ def fetch_google_doc(url):
     output_file = f"gws-export-{doc_id[:8]}.txt"
 
     try:
+        # Debug: check gws version and auth status
+        version_check = run_command_safe(["gws", "--version"], check=False)
+        print(f"  gws version: {(version_check.stdout or '').strip()}")
+
         result = run_command_safe(
             [
                 "gws", "drive", "files", "export",
@@ -126,11 +130,16 @@ def fetch_google_doc(url):
 
         if result.returncode != 0:
             stderr = result.stderr or ""
+            # Log safe diagnostic hints (no credentials)
+            for hint in ["quota", "api", "enable", "disabled", "403", "404", "401"]:
+                if hint in stderr.lower():
+                    print(f"  gws error hint: contains '{hint}'")
             if "403" in stderr or "permission" in stderr.lower():
                 return "", "", "Permission denied — ensure the doc is shared with the service account"
-            # Only match "file not found" or "not found: <docid>", not generic "not found"
             if "file not found" in stderr.lower() or f"not found: {doc_id}" in stderr.lower():
                 return "", "", "Document not found — ensure the doc is shared with the service account"
+            if "api" in stderr.lower() and ("enable" in stderr.lower() or "disabled" in stderr.lower()):
+                return "", "", "Google Drive API may not be enabled on the service account's project"
             return "", "", f"gws export failed (exit code {result.returncode})"
 
         # gws saves content to the output file
