@@ -120,13 +120,18 @@ def fetch_google_doc(url):
             check=False,
         )
 
+        print(f"  gws exit code: {result.returncode}")
+        print(f"  gws output file exists: {os.path.exists(output_file)}")
+        print(f"  gws download.txt exists: {os.path.exists('download.txt')}")
+
         if result.returncode != 0:
-            error_msg = sanitize_output(result.stderr or "Unknown error")
-            if "403" in error_msg or "permission" in error_msg.lower():
+            stderr = result.stderr or ""
+            if "403" in stderr or "permission" in stderr.lower():
                 return "", "", "Permission denied — ensure the doc is shared with the service account"
-            if "404" in error_msg or "not found" in error_msg.lower():
-                return "", "", "Document not found"
-            return "", "", f"gws export failed: {error_msg}"
+            # Only match "file not found" or "not found: <docid>", not generic "not found"
+            if "file not found" in stderr.lower() or f"not found: {doc_id}" in stderr.lower():
+                return "", "", "Document not found — ensure the doc is shared with the service account"
+            return "", "", f"gws export failed (exit code {result.returncode})"
 
         # gws saves content to the output file
         # Check if it saved to our specified path or its default (download.txt)
