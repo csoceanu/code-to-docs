@@ -105,9 +105,9 @@ def fetch_google_doc(url):
     else:
         mime_type = "text/plain"
 
-    # gws only allows output within the current directory
-    print(f"  gws cwd: {os.getcwd()}")
-    print(f"  gws creds file exists: {os.path.exists(os.environ.get('GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE', ''))}")
+    # gws only allows output within the current directory — use /app to avoid workspace issues
+    original_cwd = os.getcwd()
+    os.chdir("/app")
     output_file = f"gws-export-{doc_id[:8]}.txt"
 
     try:
@@ -163,6 +163,7 @@ def fetch_google_doc(url):
     finally:
         if os.path.exists(output_file):
             os.remove(output_file)
+        os.chdir(original_cwd)
 
 
 # ─── Link detection ──────────────────────────────────────────────────────────
