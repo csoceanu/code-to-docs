@@ -111,9 +111,13 @@ def fetch_google_doc(url):
     output_file = f"gws-export-{doc_id[:8]}.txt"
 
     try:
-        # Debug: check gws version and auth status
-        version_check = run_command_safe(["gws", "--version"], check=False)
-        print(f"  gws version: {(version_check.stdout or '').strip()}")
+        # Debug: check gws availability
+        which_check = run_command_safe(["which", "gws"], check=False)
+        print(f"  gws path: {(which_check.stdout or '').strip()}")
+        version_check = run_command_safe(["gws", "--help"], check=False)
+        print(f"  gws help exit code: {version_check.returncode}")
+        print(f"  gws help stdout (first 100): {(version_check.stdout or '')[:100]}")
+        print(f"  gws help stderr (first 100): {(version_check.stderr or '')[:100]}")
 
         result = run_command_safe(
             [
