@@ -17,6 +17,14 @@ from security_utils import (
     validate_docs_subfolder
 )
 
+# Import Jira integration for [review-feature] flow
+from jira_integration import (
+    parse_feature_command,
+    fetch_jira_context_sync,
+    analyze_feature_coverage,
+    format_feature_review_section,
+)
+
 # Import documentation index module
 from doc_index import (
     indexes_exist,
@@ -1108,10 +1116,10 @@ def parse_previous_review(pr_number):
         return result
 
 
-def post_review_comment(files_with_content, pr_number, commit_info=None, include_full_content=True):
+def post_review_comment(files_with_content, pr_number, commit_info=None, include_full_content=True, feature_section=""):
     """
     Post a review comment on the PR with documentation suggestions
-    
+
     Args:
         files_with_content: List of (file_path, original, updated) tuples
         pr_number: PR number
@@ -1197,7 +1205,11 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
         comment_parts.append("*Powered by code-to-docs AI* ✨")
         
         comment_body = "\n".join(comment_parts)
-    
+
+    # Append feature coverage section if present
+    if feature_section:
+        comment_body += "\n" + feature_section
+
     # Write comment to temp file
     comment_file = Path("/tmp/review_comment.md")
     comment_file.write_text(comment_body, encoding="utf-8")
@@ -1357,8 +1369,30 @@ def main():
         print(f"Index build complete: {result['status']}")
         return
 
-    # Detect which command was used: [review-docs] or [update-docs]
+    # Detect which command was used
     comment_body = os.environ.get("COMMENT_BODY", "")
+
+    # === [review-feature] — parse Jira key early, run feature analysis later ===
+    feature_mode = "[review-feature]" in comment_body.lower()
+    feature_issue_key = None
+    feature_instructions = ""
+    feature_section = ""
+
+    if feature_mode:
+        feature_issue_key, feature_instructions = parse_feature_command(comment_body)
+        if not feature_issue_key:
+            print("Error: Could not parse Jira issue key from comment.")
+            print("Usage: [review-feature] PROJ-123")
+            return
+
+        # Validate Jira credentials
+        jira_vars = ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN"]
+        missing_jira = [v for v in jira_vars if not os.environ.get(v)]
+        if missing_jira:
+            print(f"Error: Missing Jira credentials: {', '.join(missing_jira)}")
+            return
+
+        print(f"Feature review enabled for: {feature_issue_key}")
 
     # Determine mode based on comment
     review_mode = "[review-docs]" in comment_body.lower()
@@ -1388,6 +1422,38 @@ def main():
     # Get PR number for posting comments
     pr_number = os.environ.get("PR_NUMBER", "unknown")
 
+    # === FEATURE ANALYSIS (before docs env setup, since it uses MCP not docs repo) ===
+    if feature_mode and feature_issue_key:
+        print("Fetching Jira context via MCP...")
+        jira_context = fetch_jira_context_sync(feature_issue_key)
+
+        if jira_context["error"]:
+            print(f"Error fetching Jira data: {jira_context['error']}")
+            feature_section = (
+                "\n\n---\n\n## 🔍 Feature Coverage\n\n"
+                f"**Error:** Could not fetch Jira ticket {feature_issue_key}.\n\n"
+                f"`{jira_context['error']}`\n\n"
+                f"Please check that the issue key is correct and that the "
+                f"Jira credentials have access to this ticket."
+            )
+        else:
+            print(f"Ticket: {jira_context['summary']}")
+            print(f"Spec docs found: {len(jira_context['spec_docs'])}")
+            if jira_context["inaccessible_links"]:
+                print(f"Inaccessible links: {len(jira_context['inaccessible_links'])}")
+
+            print("Running feature coverage analysis...")
+            analysis = analyze_feature_coverage(
+                diff, jira_context, client, MODEL_NAME,
+                user_instructions=feature_instructions or "",
+            )
+            feature_section = format_feature_review_section(
+                feature_issue_key,
+                jira_context["summary"],
+                analysis,
+                jira_context["inaccessible_links"],
+            )
+
     # === INTERACTIVE REVIEW: check for previous review when [update-docs] ===
     previous_review = None
     user_instructions = ""
@@ -1411,7 +1477,7 @@ def main():
 
             if not previous_review["accepted_files"]:
                 print("All files were unchecked in the review. No updates to apply.")
-                post_review_comment([], pr_number, commit_info, include_full_content=False)
+                post_review_comment([], pr_number, commit_info, include_full_content=False, feature_section=feature_section)
                 return
 
     if not setup_docs_environment():
@@ -1452,8 +1518,8 @@ def main():
     if not relevant_files:
         print("AI did not suggest any files.")
         # Still post a comment saying no updates needed
-        if review_mode or update_mode:
-            post_review_comment([], pr_number, commit_info, include_full_content=False)
+        if review_mode or update_mode or feature_mode:
+            post_review_comment([], pr_number, commit_info, include_full_content=False, feature_section=feature_section)
         return
 
     print("Files selected for processing:", relevant_files)
@@ -1508,12 +1574,12 @@ def main():
 
     # Handle different modes
     if files_with_content:
-        # Always post review comment if [review-docs] or [update-docs]
-        if (review_mode or update_mode) and not args.dry_run:
+        # Always post review comment if [review-docs], [update-docs], or [review-feature]
+        if (review_mode or update_mode or feature_mode) and not args.dry_run:
             print(f"Posting review comment on PR #{pr_number}...")
             # [review-docs]: only summary, [update-docs]: summary + full content
             include_full = update_mode  # Show full content if [update-docs] is present
-            post_review_comment(files_with_content, pr_number, commit_info, include_full_content=include_full)
+            post_review_comment(files_with_content, pr_number, commit_info, include_full_content=include_full, feature_section=feature_section)
 
         # Create PR only if [update-docs] was used
         if update_mode and modified_files:
@@ -1564,10 +1630,10 @@ def main():
             print("All documentation is already up to date — no PR created.")
     else:
         # No files need updates
-        if (review_mode or update_mode) and not args.dry_run:
+        if (review_mode or update_mode or feature_mode) and not args.dry_run:
             print("Posting comment that no updates are needed...")
             # No content to show, so include_full_content doesn't matter
-            post_review_comment([], pr_number, commit_info, include_full_content=False)
+            post_review_comment([], pr_number, commit_info, include_full_content=False, feature_section=feature_section)
         else:
             print("All documentation is already up to date — no PR created.")
 

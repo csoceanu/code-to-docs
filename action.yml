@@ -46,7 +46,23 @@ inputs:
     required: false
     default: 'main'
   comment-body:
-    description: 'The comment body text (used to detect [review-docs] or [update-docs] commands)'
+    description: 'The comment body text (used to detect [review-docs], [update-docs], or [review-feature] commands)'
+    required: false
+    default: ''
+  jira-url:
+    description: 'Jira instance URL (e.g., https://your-company.atlassian.net). Required for [review-feature].'
+    required: false
+    default: ''
+  jira-username:
+    description: 'Jira username/email for API authentication. Required for [review-feature].'
+    required: false
+    default: ''
+  jira-api-token:
+    description: 'Jira API token for authentication. Required for [review-feature].'
+    required: false
+    default: ''
+  google-sa-key:
+    description: 'Optional: Google service account JSON key for fetching Google Docs linked in Jira tickets. If not provided, Google Docs links will be flagged but content will not be fetched.'
     required: false
     default: ''
 
@@ -74,3 +90,7 @@ runs:
     PR_HEAD_SHA: ${{ inputs.pr-head-sha }}
     DOCS_BASE_BRANCH: ${{ inputs.docs-base-branch }}
     COMMENT_BODY: ${{ inputs.comment-body }}
+    JIRA_URL: ${{ inputs.jira-url }}
+    JIRA_USERNAME: ${{ inputs.jira-username }}
+    JIRA_API_TOKEN: ${{ inputs.jira-api-token }}
+    GOOGLE_SA_KEY: ${{ inputs.google-sa-key }}

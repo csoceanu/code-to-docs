@@ -10,8 +10,14 @@ RUN dnf update -y && dnf clean all
 RUN curl -fsSL https://cli.github.com/packages/rpm/gh-cli.repo | tee /etc/yum.repos.d/github-cli.repo \
     && dnf install -y gh jq
 
+# Install Node.js and Google Workspace CLI (for fetching Google Docs)
+RUN dnf install -y nodejs npm && npm install -g @googleworkspace/cli
+
+# Install uv (Python package runner, needed for mcp-atlassian)
+RUN pip install --no-cache-dir -U uv
+
 # Install Python dependencies
-RUN pip install --no-cache-dir -U openai
+RUN pip install --no-cache-dir -U openai mcp mcp-atlassian
 
 # Set up working directory
 WORKDIR /app
@@ -20,6 +26,8 @@ WORKDIR /app
 COPY scripts/suggest_docs.py /app/suggest_docs.py
 COPY scripts/security_utils.py /app/security_utils.py
 COPY scripts/doc_index.py /app/doc_index.py
+COPY scripts/jira_integration.py /app/jira_integration.py
+COPY scripts/test_mcp_jira.py /app/test_mcp_jira.py
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
