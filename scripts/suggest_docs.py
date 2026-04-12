@@ -1646,6 +1646,59 @@ def main():
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
+            # Post a confirmation comment for [update-docs] after a review
+            if previous_review and previous_review["review_found"] and not args.dry_run:
+                confirm_parts = []
+                confirm_parts.append("## 📚 Documentation Update")
+                confirm_parts.append("")
+                if modified_files:
+                    confirm_parts.append(f"Updated **{len(modified_files)} file(s)** based on your review selections:")
+                    confirm_parts.append("")
+                    for f in modified_files:
+                        confirm_parts.append(f"- ✅ `{f}`")
+                if previous_review.get("rejected_files"):
+                    confirm_parts.append("")
+                    confirm_parts.append(f"Skipped **{len(previous_review['rejected_files'])} file(s)** (unchecked):")
+                    confirm_parts.append("")
+                    for f in previous_review["rejected_files"]:
+                        confirm_parts.append(f"- ⏭️ `{f}`")
+                if modified_files:
+                    confirm_parts.append("")
+                    confirm_parts.append("### 📄 Changes")
+                    confirm_parts.append("")
+                    for file_path, original, updated in files_with_content:
+                        if file_path in modified_files:
+                            confirm_parts.append(f"#### `{file_path}`")
+                            confirm_parts.append("")
+                            confirm_parts.append("<details>")
+                            confirm_parts.append("<summary><b>View diff</b></summary>")
+                            confirm_parts.append("")
+                            diff_lines = list(difflib.unified_diff(
+                                original.splitlines(keepends=True),
+                                updated.splitlines(keepends=True),
+                                fromfile=f"a/{file_path}",
+                                tofile=f"b/{file_path}",
+                                n=3,
+                            ))
+                            if diff_lines:
+                                confirm_parts.append("```diff")
+                                confirm_parts.append("".join(diff_lines))
+                                confirm_parts.append("```")
+                            confirm_parts.append("")
+                            confirm_parts.append("</details>")
+                            confirm_parts.append("")
+                    confirm_parts.append("A docs PR has been created/updated with these changes.")
+                confirm_body = "\n".join(confirm_parts)
+                confirm_file = Path("/tmp/update_confirm.md")
+                confirm_file.write_text(confirm_body, encoding="utf-8")
+                gh_token = os.environ.get("GH_TOKEN")
+                if gh_token:
+                    run_command_safe(
+                        ["gh", "pr", "comment", str(pr_number), "--body-file", str(confirm_file)],
+                        env={**os.environ, "GH_TOKEN": gh_token},
+                        check=False,
+                    )
+
         elif update_mode and not modified_files and not args.dry_run:
             print("All documentation is already up to date — no PR created.")
     else:
