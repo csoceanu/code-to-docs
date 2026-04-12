@@ -3,6 +3,7 @@ import re
 import json
 import subprocess
 import argparse
+import difflib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
@@ -1165,13 +1166,14 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
                 comment_parts.append(summary)
                 comment_parts.append("")
 
-            # Include full content only if requested (for [update-docs])
+            # Include diff of changes if requested (for [update-docs] without previous review)
             if include_full_content:
                 comment_parts.append("### 📄 Proposed Changes")
                 comment_parts.append("")
-                
+
                 for item in filtered_files:
                     file_path = item[0]
+                    original = item[1] if len(item) > 2 else ""
                     new_content = item[2] if len(item) > 2 else item[1]
                     # Create clickable link if possible
                     file_url = get_docs_file_url(file_path, commit_info)
@@ -1181,11 +1183,22 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
                         comment_parts.append(f"#### 📄 `{file_path}`")
                     comment_parts.append("")
                     comment_parts.append("<details>")
-                    comment_parts.append(f"<summary><b>View full updated content</b></summary>")
+                    comment_parts.append(f"<summary><b>View proposed changes</b></summary>")
                     comment_parts.append("")
-                    comment_parts.append("```" + ("markdown" if file_path.endswith('.md') else "rst" if file_path.endswith('.rst') else "asciidoc"))
-                    comment_parts.append(new_content)
-                    comment_parts.append("```")
+                    # Show diff instead of full content
+                    diff_lines = list(difflib.unified_diff(
+                        original.splitlines(keepends=True),
+                        new_content.splitlines(keepends=True),
+                        fromfile=f"a/{file_path}",
+                        tofile=f"b/{file_path}",
+                        n=3,
+                    ))
+                    if diff_lines:
+                        comment_parts.append("```diff")
+                        comment_parts.append("".join(diff_lines))
+                        comment_parts.append("```")
+                    else:
+                        comment_parts.append("No changes detected.")
                     comment_parts.append("")
                     comment_parts.append("</details>")
                     comment_parts.append("")
@@ -1578,12 +1591,15 @@ def main():
 
     # Handle different modes
     if files_with_content:
-        # Always post review comment if [review-docs], [update-docs], or [review-feature]
-        if (review_mode or update_mode or feature_mode) and not args.dry_run:
+        # Post review comment for [review-docs] or [review-feature]
+        # For [update-docs] after a previous review, skip the redundant review comment
+        if (review_mode or feature_mode) and not args.dry_run:
             print(f"Posting review comment on PR #{pr_number}...")
-            # [review-docs]: only summary, [update-docs]: summary + full content
-            include_full = update_mode  # Show full content if [update-docs] is present
-            post_review_comment(files_with_content, pr_number, commit_info, include_full_content=include_full, feature_section=feature_section)
+            post_review_comment(files_with_content, pr_number, commit_info, include_full_content=False, feature_section=feature_section)
+        elif update_mode and not (previous_review and previous_review["review_found"]) and not args.dry_run:
+            # [update-docs] without a previous review — show the review comment with diffs
+            print(f"Posting review comment on PR #{pr_number}...")
+            post_review_comment(files_with_content, pr_number, commit_info, include_full_content=True, feature_section=feature_section)
 
         # Create PR only if [update-docs] was used
         if update_mode and modified_files:
