@@ -1427,7 +1427,7 @@ def main():
                     "The following secrets are missing:\n\n"
                     f"{missing_list}\n\n"
                     "Please add them in **Settings → Secrets → Actions** and comment "
-                    "`[review-feature] " + feature_issue_key + "` again.\n\n"
+                    "`[review-feature] PROJ-123` again.\n\n"
                     "You can also use `[review-docs]` or `[update-docs]` which don't require Jira credentials.\n\n"
                     "For setup details, see the [configuration guide](https://github.com/csoceanu/code-to-docs#2-configure-secrets)."
                 )
