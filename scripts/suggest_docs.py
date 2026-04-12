@@ -1596,10 +1596,7 @@ def main():
         if (review_mode or feature_mode) and not args.dry_run:
             print(f"Posting review comment on PR #{pr_number}...")
             post_review_comment(files_with_content, pr_number, commit_info, include_full_content=False, feature_section=feature_section)
-        elif update_mode and not (previous_review and previous_review["review_found"]) and not args.dry_run:
-            # [update-docs] without a previous review — show the review comment with diffs
-            print(f"Posting review comment on PR #{pr_number}...")
-            post_review_comment(files_with_content, pr_number, commit_info, include_full_content=True, feature_section=feature_section)
+        # [update-docs] confirmation is posted after the PR is created (below)
 
         # Create PR only if [update-docs] was used
         if update_mode and modified_files:
@@ -1646,17 +1643,20 @@ def main():
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
-            # Post a confirmation comment for [update-docs] after a review
-            if previous_review and previous_review["review_found"] and not args.dry_run:
+            # Post a confirmation comment for [update-docs]
+            if update_mode and modified_files and not args.dry_run:
                 confirm_parts = []
                 confirm_parts.append("## 📚 Documentation Update")
                 confirm_parts.append("")
                 if modified_files:
-                    confirm_parts.append(f"Updated **{len(modified_files)} file(s)** based on your review selections:")
+                    if previous_review and previous_review["review_found"]:
+                        confirm_parts.append(f"Updated **{len(modified_files)} file(s)** based on your review selections:")
+                    else:
+                        confirm_parts.append(f"Updated **{len(modified_files)} file(s)**:")
                     confirm_parts.append("")
                     for f in modified_files:
                         confirm_parts.append(f"- ✅ `{f}`")
-                if previous_review.get("rejected_files"):
+                if previous_review and previous_review.get("rejected_files"):
                     confirm_parts.append("")
                     confirm_parts.append(f"Skipped **{len(previous_review['rejected_files'])} file(s)** (unchecked):")
                     confirm_parts.append("")
