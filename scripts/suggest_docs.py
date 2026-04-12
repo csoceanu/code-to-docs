@@ -1403,6 +1403,28 @@ def main():
         missing_jira = [v for v in jira_vars if not os.environ.get(v)]
         if missing_jira:
             print(f"Error: Missing Jira credentials: {', '.join(missing_jira)}")
+            pr_number = os.environ.get("PR_NUMBER", "unknown")
+            if pr_number and pr_number != "unknown":
+                missing_list = "\n".join([f"- `{v}`" for v in missing_jira])
+                msg = (
+                    "## 🔍 Spec vs Code Analysis\n\n"
+                    f"Could not run feature analysis for `{feature_issue_key}`. "
+                    "The following secrets are missing:\n\n"
+                    f"{missing_list}\n\n"
+                    "Please add them in **Settings → Secrets → Actions** and comment "
+                    "`[review-feature] " + feature_issue_key + "` again.\n\n"
+                    "You can also use `[review-docs]` or `[update-docs]` which don't require Jira credentials.\n\n"
+                    "For setup details, see the [configuration guide](https://github.com/csoceanu/code-to-docs#2-configure-secrets)."
+                )
+                msg_file = Path("/tmp/missing_secrets.md")
+                msg_file.write_text(msg, encoding="utf-8")
+                gh_token = os.environ.get("GH_TOKEN")
+                if gh_token:
+                    run_command_safe(
+                        ["gh", "pr", "comment", str(pr_number), "--body-file", str(msg_file)],
+                        env={**os.environ, "GH_TOKEN": gh_token},
+                        check=False,
+                    )
             return
 
         print(f"Feature review enabled for: {feature_issue_key}")
