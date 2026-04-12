@@ -1429,7 +1429,7 @@ def main():
                     "Please add them in **Settings → Secrets → Actions** and comment "
                     "`[review-feature] PROJ-123` again.\n\n"
                     "You can also use `[review-docs]` or `[update-docs]` which don't require Jira credentials.\n\n"
-                    "For setup details, see the [configuration guide](https://github.com/csoceanu/code-to-docs#2-configure-secrets)."
+                    "For setup details, see the [configuration guide](https://github.com/redhat-community-ai-tools/code-to-docs#2-configure-secrets)."
                 )
                 msg_file = Path("/tmp/missing_secrets.md")
                 msg_file.write_text(msg, encoding="utf-8")
