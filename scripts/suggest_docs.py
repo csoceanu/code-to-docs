@@ -1395,7 +1395,22 @@ def main():
         feature_issue_key, feature_instructions = parse_feature_command(comment_body)
         if not feature_issue_key:
             print("Error: Could not parse Jira issue key from comment.")
-            print("Usage: [review-feature] PROJ-123")
+            pr_number = os.environ.get("PR_NUMBER", "unknown")
+            if pr_number and pr_number != "unknown":
+                msg = (
+                    "## 🔍 Spec vs Code Analysis\n\n"
+                    "Could not parse Jira issue key from your comment.\n\n"
+                    "Usage: `[review-feature] PROJ-123`"
+                )
+                msg_file = Path("/tmp/missing_key.md")
+                msg_file.write_text(msg, encoding="utf-8")
+                gh_token = os.environ.get("GH_TOKEN")
+                if gh_token:
+                    run_command_safe(
+                        ["gh", "pr", "comment", str(pr_number), "--body-file", str(msg_file)],
+                        env={**os.environ, "GH_TOKEN": gh_token},
+                        check=False,
+                    )
             return
 
         # Validate Jira credentials
