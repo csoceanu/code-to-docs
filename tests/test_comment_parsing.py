@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 # Import the functions under test — these live in scripts/ (added to path by conftest)
-from suggest_docs import (
+from comments import (
     parse_update_instructions,
     _resolve_file_instructions,
     parse_previous_review,
@@ -152,7 +152,7 @@ class TestParsePreviousReview:
         )
         gh_response = json.dumps({"comments": [{"body": body}]})
 
-        with patch("suggest_docs.run_command_safe") as mock_cmd:
+        with patch("comments.run_command_safe") as mock_cmd:
             mock_result = MagicMock()
             mock_result.returncode = 0
             mock_result.stdout = gh_response
@@ -169,7 +169,7 @@ class TestParsePreviousReview:
         monkeypatch.setenv("GH_TOKEN", "tok")
         gh_response = json.dumps({"comments": [{"body": "just a regular comment"}]})
 
-        with patch("suggest_docs.run_command_safe") as mock_cmd:
+        with patch("comments.run_command_safe") as mock_cmd:
             mock_result = MagicMock()
             mock_result.returncode = 0
             mock_result.stdout = gh_response
@@ -188,7 +188,7 @@ class TestParsePreviousReview:
         )
         gh_response = json.dumps({"comments": [{"body": body}]})
 
-        with patch("suggest_docs.run_command_safe") as mock_cmd:
+        with patch("comments.run_command_safe") as mock_cmd:
             mock_result = MagicMock()
             mock_result.returncode = 0
             mock_result.stdout = gh_response
@@ -212,7 +212,7 @@ class TestParsePreviousReview:
         )
         gh_response = json.dumps({"comments": [{"body": body}]})
 
-        with patch("suggest_docs.run_command_safe") as mock_cmd:
+        with patch("comments.run_command_safe") as mock_cmd:
             mock_result = MagicMock()
             mock_result.returncode = 0
             mock_result.stdout = gh_response
@@ -227,7 +227,7 @@ class TestParsePreviousReview:
 
     def test_gh_command_failure_returns_empty(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "tok")
-        with patch("suggest_docs.run_command_safe") as mock_cmd:
+        with patch("comments.run_command_safe") as mock_cmd:
             mock_result = MagicMock()
             mock_result.returncode = 1
             mock_result.stderr = "not found"
@@ -253,7 +253,7 @@ class TestParsePreviousReview:
             ]
         })
 
-        with patch("suggest_docs.run_command_safe") as mock_cmd:
+        with patch("comments.run_command_safe") as mock_cmd:
             mock_result = MagicMock()
             mock_result.returncode = 0
             mock_result.stdout = gh_response

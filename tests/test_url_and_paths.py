@@ -1,6 +1,6 @@
 """Tests for URL construction and path helpers in suggest_docs.py."""
 
-from suggest_docs import get_docs_file_url
+from comments import get_docs_file_url
 
 
 class TestGetDocsFileUrl:
