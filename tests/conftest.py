@@ -43,3 +43,61 @@ def tmp_tree(tmp_path):
     sub.mkdir()
     (sub / "nested.md").write_text("# Nested")
     return tmp_path
+
+
+@pytest.fixture
+def doc_tree(tmp_path):
+    """Create a realistic documentation tree for doc_index tests.
+
+    Structure:
+        tmp_path/
+        ├── rados/
+        │   ├── operations/
+        │   │   ├── health-checks.rst
+        │   │   └── monitoring.rst
+        │   └── configuration/
+        │       └── osd-config-ref.rst
+        ├── rbd/
+        │   └── rbd-operations.md
+        ├── _build/           (should be skipped — underscore prefix)
+        │   └── output.rst
+        ├── .hidden/          (should be skipped — dot prefix)
+        │   └── secret.md
+        ├── overview.rst      (root-level doc, no folder)
+        └── README.md         (root-level doc)
+    """
+    # rados folder
+    ops = tmp_path / "rados" / "operations"
+    ops.mkdir(parents=True)
+    (ops / "health-checks.rst").write_text(
+        "Health Checks\n=============\n\nMonitor health check reference."
+    )
+    (ops / "monitoring.rst").write_text(
+        "Monitoring\n==========\n\nHow to monitor your cluster."
+    )
+    conf = tmp_path / "rados" / "configuration"
+    conf.mkdir(parents=True)
+    (conf / "osd-config-ref.rst").write_text(
+        "OSD Config Ref\n==============\n\nOSD configuration options."
+    )
+
+    # rbd folder
+    rbd = tmp_path / "rbd"
+    rbd.mkdir()
+    (rbd / "rbd-operations.md").write_text("# RBD Operations\n\nBlock device ops.")
+
+    # _build folder (should be skipped)
+    build = tmp_path / "_build"
+    build.mkdir()
+    (build / "output.rst").write_text("Build output")
+
+    # .hidden folder (should be skipped)
+    hidden = tmp_path / ".hidden"
+    hidden.mkdir()
+    (hidden / "secret.md").write_text("Secret")
+
+    # root-level docs (no folder)
+    (tmp_path / "overview.rst").write_text("Overview\n========\n\nProject overview.")
+    (tmp_path / "README.md").write_text("# README")
+
+    return tmp_path
