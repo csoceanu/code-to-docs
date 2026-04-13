@@ -4,7 +4,10 @@ import json
 import hashlib
 import pytest
 
+import os
+
 from doc_index import (
+    working_directory,
     hash_file,
     get_docs_root,
     get_doc_folders,
@@ -29,6 +32,34 @@ from doc_index import (
     INDEX_DIR,
     SUMMARIES_DIR,
 )
+
+
+# ── working_directory ────────────────────────────────────────────────────────
+
+
+class TestWorkingDirectory:
+    def test_changes_to_target_dir(self, tmp_path):
+        target = tmp_path / "subdir"
+        target.mkdir()
+        with working_directory(target):
+            assert os.getcwd() == str(target)
+
+    def test_restores_cwd_on_normal_exit(self, tmp_path):
+        original = os.getcwd()
+        target = tmp_path / "subdir"
+        target.mkdir()
+        with working_directory(target):
+            pass
+        assert os.getcwd() == original
+
+    def test_restores_cwd_on_exception(self, tmp_path):
+        original = os.getcwd()
+        target = tmp_path / "subdir"
+        target.mkdir()
+        with pytest.raises(ValueError):
+            with working_directory(target):
+                raise ValueError("boom")
+        assert os.getcwd() == original
 
 
 # ── hash_file ────────────────────────────────────────────────────────────────
