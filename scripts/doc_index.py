@@ -27,7 +27,8 @@ import time
 # Thread lock for manifest file operations (prevents race conditions in parallel summary generation)
 _manifest_lock = threading.Lock()
 
-from openai import OpenAI
+# Import configuration
+from config import get_client, get_model_name
 
 # Import security utilities for safe output
 from security_utils import sanitize_output, run_command_safe
@@ -40,19 +41,6 @@ SUMMARIES_MANIFEST = "summaries_manifest.json"
 INDEX_VERSION = "1.0"
 MAX_WORKERS_INDEX = 5  # Parallel threads for index generation
 MAX_WORKERS_API = 10   # Parallel threads for API calls
-
-
-def get_client():
-    """Get OpenAI-compatible client"""
-    return OpenAI(
-        base_url=os.environ["MODEL_API_BASE"],
-        api_key=os.environ.get("MODEL_API_KEY") or "EMPTY",
-    )
-
-
-def get_model_name():
-    """Get the configured model name"""
-    return os.environ.get("MODEL_NAME", "default")
 
 
 def hash_file(file_path):
@@ -508,12 +496,12 @@ def commit_indexes_to_repo(content_type="indexes"):
             repo_root = docs_root.parent
             os.chdir(str(repo_root))
             index_relative_path = f"{docs_subfolder}/{INDEX_DIR}"
-            print(f"DEBUG: Changed to repo root: {repo_root}, index path: {index_relative_path}")
+            print(f"Changed to repo root for git operations")
         else:
             # We're at repo root or in a separate docs repo
             os.chdir(str(docs_root))
             index_relative_path = INDEX_DIR
-            print(f"DEBUG: Staying in docs root: {docs_root}, index path: {index_relative_path}")
+            print(f"Using docs root for git operations")
         
         # Check if there are any changes to commit
         status_result = run_command_safe(
@@ -1094,7 +1082,7 @@ def load_cached_summary(file_path, docs_root=None):
     # Debug: show manifest state on first call
     manifest_files = manifest.get("files", {})
     if len(manifest_files) > 0 and not hasattr(load_cached_summary, '_debug_shown'):
-        print(f"DEBUG: Summaries manifest has {len(manifest_files)} entries")
+        print(f"Summaries manifest has {len(manifest_files)} entries")
         load_cached_summary._debug_shown = True
     
     # Check if we have a cached summary

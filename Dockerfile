@@ -23,6 +23,11 @@ RUN pip install --no-cache-dir -U openai mcp mcp-atlassian
 WORKDIR /app
 
 # Copy the scripts
+COPY scripts/config.py /app/config.py
+COPY scripts/github_ops.py /app/github_ops.py
+COPY scripts/discovery.py /app/discovery.py
+COPY scripts/generation.py /app/generation.py
+COPY scripts/comments.py /app/comments.py
 COPY scripts/suggest_docs.py /app/suggest_docs.py
 COPY scripts/security_utils.py /app/security_utils.py
 COPY scripts/doc_index.py /app/doc_index.py
