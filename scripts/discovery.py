@@ -17,6 +17,7 @@ from config import get_client, get_model_name
 
 # Import security utilities
 from security_utils import sanitize_output
+from utils import calc_backoff_delay
 
 # Import documentation index module
 from doc_index import (
@@ -66,7 +67,7 @@ Provide a detailed summary that would help an AI system understand when this fil
 
         except Exception as e:
             error_str = sanitize_output(str(e))
-            wait_time = (attempt + 1) * 3
+            wait_time = calc_backoff_delay(attempt, multiplier=3)
             print(f"Error for {file_path} (attempt {attempt + 1}/{max_retries}): {error_str}, waiting {wait_time}s...")
 
             time.sleep(wait_time)
@@ -165,8 +166,7 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
             result_text = (response.choices[0].message.content or "").strip()
             if not result_text:
                 if attempt < max_retries - 1:
-        
-                    time.sleep(2 * (attempt + 1))
+                    time.sleep(calc_backoff_delay(attempt, multiplier=2))
                     continue
                 return batch_num, []
 
@@ -187,8 +187,7 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
 
         except Exception as e:
             if attempt < max_retries - 1:
-    
-                wait_time = 3 * (attempt + 1)
+                wait_time = calc_backoff_delay(attempt, multiplier=3)
                 print(f"Batch {batch_num}: Error (attempt {attempt + 1}), waiting {wait_time}s...")
                 time.sleep(wait_time)
             else:

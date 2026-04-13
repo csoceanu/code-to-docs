@@ -32,6 +32,7 @@ COPY scripts/suggest_docs.py /app/suggest_docs.py
 COPY scripts/security_utils.py /app/security_utils.py
 COPY scripts/doc_index.py /app/doc_index.py
 COPY scripts/jira_integration.py /app/jira_integration.py
+COPY scripts/utils.py /app/utils.py
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
