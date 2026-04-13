@@ -27,7 +27,8 @@ import time
 # Thread lock for manifest file operations (prevents race conditions in parallel summary generation)
 _manifest_lock = threading.Lock()
 
-from openai import OpenAI
+# Import configuration
+from config import get_client, get_model_name
 
 # Import security utilities for safe output
 from security_utils import sanitize_output, run_command_safe
@@ -40,19 +41,6 @@ SUMMARIES_MANIFEST = "summaries_manifest.json"
 INDEX_VERSION = "1.0"
 MAX_WORKERS_INDEX = 5  # Parallel threads for index generation
 MAX_WORKERS_API = 10   # Parallel threads for API calls
-
-
-def get_client():
-    """Get OpenAI-compatible client"""
-    return OpenAI(
-        base_url=os.environ["MODEL_API_BASE"],
-        api_key=os.environ.get("MODEL_API_KEY") or "EMPTY",
-    )
-
-
-def get_model_name():
-    """Get the configured model name"""
-    return os.environ.get("MODEL_NAME", "default")
 
 
 def hash_file(file_path):

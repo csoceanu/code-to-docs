@@ -6,7 +6,12 @@ import argparse
 import difflib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from openai import OpenAI
+
+# Import configuration
+from config import get_client, get_model_name, get_docs_repo_url, get_branch_name
+
+# Import git/GitHub operations
+from github_ops import get_diff, get_commit_info, setup_docs_environment, push_and_open_pr
 
 # Import security utilities
 from security_utils import (
@@ -40,14 +45,23 @@ from doc_index import (
     summaries_exist
 )
 
-# === CONFIG ===
-client = OpenAI(
-    base_url=os.environ["MODEL_API_BASE"],
-    api_key=os.environ.get("MODEL_API_KEY") or "EMPTY",
-)
-MODEL_NAME = os.environ.get("MODEL_NAME", "default")
-DOCS_REPO_URL = os.environ["DOCS_REPO_URL"]
-BRANCH_NAME = "doc-update-from-pr"
+# === CONFIG (lazy — no env vars read at import time) ===
+# Access via functions: get_client(), get_model_name(), get_docs_repo_url(), get_branch_name()
+# Legacy aliases for code that still uses the old names directly:
+client = None  # Initialized lazily on first use
+MODEL_NAME = None
+DOCS_REPO_URL = None
+BRANCH_NAME = None
+
+
+def _ensure_config():
+    """Initialize config globals on first use (not at import time)."""
+    global client, MODEL_NAME, DOCS_REPO_URL, BRANCH_NAME
+    if client is None:
+        client = get_client()
+        MODEL_NAME = get_model_name()
+        DOCS_REPO_URL = get_docs_repo_url()
+        BRANCH_NAME = get_branch_name(os.environ.get("PR_NUMBER"))
 
 
 def get_docs_file_url(file_path, commit_info=None):
@@ -70,10 +84,12 @@ def get_docs_file_url(file_path, commit_info=None):
         # Construct full path including docs subfolder
         full_path = f"{docs_subfolder}/{file_path}" if not file_path.startswith(docs_subfolder) else file_path
         return f"{repo_url}/blob/{base_branch}/{full_path}"
-    elif DOCS_REPO_URL:
+
+    docs_repo_url = get_docs_repo_url()
+    if docs_repo_url:
         # Separate repo scenario: use docs repo URL
         # Convert SSH URL to HTTPS if needed
-        repo_url = DOCS_REPO_URL
+        repo_url = docs_repo_url
         if repo_url.startswith("git@github.com:"):
             repo_url = repo_url.replace("git@github.com:", "https://github.com/").replace(".git", "")
         elif repo_url.endswith(".git"):
@@ -82,186 +98,9 @@ def get_docs_file_url(file_path, commit_info=None):
     
     return None
 
-def get_diff():
-    """
-    Get the full diff for the entire PR, not just the latest commit
-    Uses safe subprocess execution
-    """
-    # First, try to get PR base from environment (set by GitHub Actions)
-    pr_base = os.environ.get("PR_BASE", "origin/main")
-    pr_number = os.environ.get("PR_NUMBER", "unknown")
-    
-    print(f"Getting diff for PR #{pr_number} against base: {pr_base}")
-    
-    try:
-        # Get the merge-base to ensure we capture all PR changes
-        merge_base_result = run_command_safe(
-            ["git", "merge-base", pr_base, "HEAD"],
-            check=False
-        )
-        
-        if merge_base_result.returncode == 0:
-            # Use merge-base to get all changes in the PR branch
-            merge_base = merge_base_result.stdout.strip()
-            print(f"Using merge-base: {merge_base[:7]}...{merge_base[-7:]}")
-            
-            # Show which files changed in the entire PR
-            files_result = run_command_safe(
-                ["git", "diff", "--name-only", f"{merge_base}...HEAD"],
-                check=False
-            )
-            if files_result.returncode == 0:
-                changed_files = files_result.stdout.strip().split('\n')
-                changed_files = [f for f in changed_files if f.strip()]
-                print(f"Files changed in entire PR: {changed_files}")
-            
-            result = run_command_safe(
-                ["git", "diff", f"{merge_base}...HEAD"],
-                check=False
-            )
-            diff_method = f"merge-base ({merge_base[:7]}...HEAD)"
-        else:
-            # Fallback to the original method
-            print("Warning: Could not find merge-base, using fallback diff method")
-            result = run_command_safe(
-                ["git", "diff", f"{pr_base}...HEAD"],
-                check=False
-            )
-            diff_method = f"direct ({pr_base}...HEAD)"
-        
-        diff_content = result.stdout.strip() if result.stdout else ""
-        print(f"Diff method: {diff_method}")
-        print(f"Diff size: {len(diff_content)} characters")
-        
-        return diff_content
-    except Exception as e:
-        print(f"❌ Error getting diff: {sanitize_output(str(e))}")
-        return ""
 
-def get_commit_info():
-    """
-    Get PR information for the documentation PR reference
-    Uses safe subprocess execution
-    """
-    try:
-        # Get PR number from environment if available
-        pr_number = os.environ.get("PR_NUMBER")
-        print(f"Debug: PR_NUMBER from environment: '{pr_number}'")
-        
-        # Get the HEAD commit - this is what GitHub Actions checked out for the PR
-        current_commit_result = run_command_safe(
-            ["git", "rev-parse", "HEAD"],
-            check=False
-        )
-        if current_commit_result.returncode != 0:
-            return None
-        commit_hash = current_commit_result.stdout.strip()
-        
-        # Get remote origin URL to construct proper commit links
-        remote_url = run_command_safe(
-            ["git", "config", "--get", "remote.origin.url"],
-            check=False
-        )
-        if remote_url.returncode != 0:
-            return None
-        
-        # Convert SSH URL to HTTPS if needed
-        repo_url = remote_url.stdout.strip()
-        if repo_url.startswith("git@github.com:"):
-            repo_url = repo_url.replace("git@github.com:", "https://github.com/").replace(".git", "")
-        elif repo_url.endswith(".git"):
-            repo_url = repo_url.replace(".git", "")
-        
-        # Get commit details
-        short_hash = commit_hash[:7]
-        
-        # Return PR information if available, otherwise fallback to commit info
-        result = {
-            'repo_url': repo_url,
-            'current_commit': commit_hash,
-            'short_hash': short_hash
-        }
-        
-        # Check if we have a valid PR number (not None, not empty, not "unknown")
-        if pr_number and pr_number.strip() and pr_number != "unknown":
-            result['pr_number'] = pr_number
-            result['pr_url'] = f"{repo_url}/pull/{pr_number}"
-            print(f"Debug: Using PR info - PR #{pr_number}")
-        else:
-            print(f"Debug: No valid PR number, falling back to commit info")
-        
-        return result
-            
-    except Exception as e:
-        print(f"Warning: Could not get commit info: {sanitize_output(str(e))}")
-        return None
-
-def setup_docs_environment():
-    """
-    Set up docs environment - either local subfolder or clone separate repo
-    Uses secure git operations
-    """
-    docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
-    
-    if docs_subfolder:
-        # Use local subfolder (same repo)
-        current_dir = os.getcwd()
-        print(f"DEBUG: Current working directory before chdir: {current_dir}")
-        print(f"DEBUG: DOCS_SUBFOLDER environment variable value: '{docs_subfolder}'")
-        
-        # Validate subfolder path
-        subfolder_path = os.path.join(current_dir, docs_subfolder)
-        print(f"DEBUG: Full path to docs subfolder: {subfolder_path}")
-        
-        # Security: ensure no path traversal
-        if not validate_docs_subfolder(docs_subfolder):
-            print(f"❌ Security: Invalid docs subfolder path: {docs_subfolder}")
-            return False
-        
-        if not os.path.exists(docs_subfolder):
-            print(f"ERROR: Docs subfolder '{docs_subfolder}' not found at {subfolder_path}")
-            print(f"DEBUG: Contents of current directory: {os.listdir('.')}")
-            return False
-        
-        print(f"DEBUG: Changing to docs subfolder: {docs_subfolder}")    
-        os.chdir(docs_subfolder)
-        
-        final_dir = os.getcwd()
-        print(f"DEBUG: Final working directory after chdir: {final_dir}")
-        print(f"DEBUG: Contents of docs directory: {os.listdir('.')[:10]}...")  # Show first 10 items
-        return True
-    else:
-        # Clone separate repository with secure credentials
-        try:
-            print("Cloning separate docs repository")
-            
-            # Setup secure credentials before cloning
-            gh_token = os.environ.get("GH_TOKEN")
-            if gh_token:
-                setup_git_credentials(gh_token, DOCS_REPO_URL)
-            
-            result = run_command_safe(["git", "clone", DOCS_REPO_URL, "docs_repo"], check=True)
-            os.chdir("docs_repo")
-
-            # Try to check out the branch if it already exists
-            result = run_command_safe(
-                ["git", "ls-remote", "--heads", "origin", BRANCH_NAME],
-                check=False
-            )
-            
-            if result.stdout and result.stdout.strip():
-                print(f"Reusing existing branch: {BRANCH_NAME}")
-                run_command_safe(["git", "fetch", "origin", BRANCH_NAME], check=True)
-                run_command_safe(["git", "checkout", BRANCH_NAME], check=True)
-                run_command_safe(["git", "pull", "origin", BRANCH_NAME], check=True)
-            else:
-                print(f"Creating new branch: {BRANCH_NAME}")
-                run_command_safe(["git", "checkout", "-b", BRANCH_NAME], check=True)
-            
-            return True
-        except Exception as e:
-            print(f"❌ Failed to setup docs environment: {sanitize_output(str(e))}")
-            return False
+# get_diff, get_commit_info, setup_docs_environment, push_and_open_pr
+# have been moved to github_ops.py
 
 
 def summarize_long_file(file_path, content, max_retries=3):
@@ -1251,118 +1090,9 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
         print(f"❌ Error posting comment: {sanitize_output(str(e))}")
         return False
 
-def push_and_open_pr(modified_files, commit_info=None):
-    """
-    Push changes and create PR in docs repository
-    Uses secure credential helper to prevent token leakage
-    """
-    try:
-        # Add files
-        result = run_command_safe(["git", "add"] + modified_files, check=True)
-        
-        # Build commit message with useful links
-        commit_msg = "Auto-generated doc updates from code changes"
-        
-        if commit_info:
-            if 'pr_number' in commit_info:
-                commit_msg += f"\n\nPR Link: {commit_info['pr_url']}"
-                commit_msg += f"\nLatest commit: {commit_info['short_hash']}"
-            else:
-                # Fallback to commit reference if no PR info available
-                commit_url = f"{commit_info['repo_url']}/commit/{commit_info['current_commit']}"
-                commit_msg += f"\n\nCommit Link: {commit_url}"
-                commit_msg += f"\nLatest commit: {commit_info['short_hash']}"
-        
-        commit_msg += "\n\nAssisted-by: code-to-docs AI"
-        
-        # Commit changes
-        result = run_command_safe([
-            "git", "commit",
-            "-m", commit_msg
-        ], check=True)
-        
-        # Setup secure git credentials
-        gh_token = os.environ.get("GH_TOKEN")
-        if not gh_token:
-            raise ValueError("GH_TOKEN environment variable not set")
-        
-        # Clear GitHub Actions default authentication that interferes with our PAT
-        run_command_safe(
-            ["git", "config", "--unset-all", "http.https://github.com/.extraheader"],
-            check=False,
-            capture_output=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        
-        # Setup credential helper (secure - no token in URL)
-        setup_git_credentials(gh_token, DOCS_REPO_URL)
-        
-        # Set remote URL without token (credentials come from helper)
-        run_command_safe(["git", "remote", "set-url", "origin", DOCS_REPO_URL], check=True)
-        
-        # Push changes
-        print(f"Pushing to branch {BRANCH_NAME}...")
-        result = run_command_safe(
-            ["git", "push", "--set-upstream", "origin", BRANCH_NAME, "--force"],
-            check=True
-        )
-        
-        if result.returncode == 0:
-            print("✅ Successfully pushed changes")
-        
-        # Build PR body with source reference
-        pr_body = "This PR updates the following documentation files based on code changes:\n\n"
-        pr_body += "\n".join([f"- `{f}`" for f in modified_files])
-        
-        # Add source reference
-        if commit_info:
-            pr_body += "\n\n---\n**Source:**\n"
-            if 'pr_number' in commit_info:
-                pr_body += f"- PR: {commit_info['pr_url']}\n"
-            pr_body += f"- Commit: `{commit_info['short_hash']}`"
-        
-        pr_body += "\n\n*Assisted by code-to-docs AI*"
-        
-        # Check if PR already exists for this branch
-        print("Checking for existing pull request...")
-        check_pr = run_command_safe([
-            "gh", "pr", "list",
-            "--head", BRANCH_NAME,
-            "--state", "open",
-            "--json", "number"
-        ], check=False, env={**os.environ, "GH_TOKEN": gh_token})
-        
-        existing_pr = check_pr.stdout.strip() if check_pr.returncode == 0 else "[]"
-        
-        if existing_pr and existing_pr != "[]":
-            # PR exists - just update it (push already updated the branch)
-            print("✅ Existing PR found - branch updated with new changes")
-            print("   (The push already updated the PR with the latest commits)")
-        else:
-            # Create new PR
-            print("Creating pull request...")
-            result = run_command_safe([
-                "gh", "pr", "create",
-                "--title", "Auto-Generated Doc Updates from Code PR",
-                "--body", pr_body,
-                "--base", os.environ.get("DOCS_BASE_BRANCH", "main"),
-                "--head", BRANCH_NAME
-            ], check=True, env={**os.environ, "GH_TOKEN": gh_token})
-            
-            if result.returncode == 0:
-                print("✅ Successfully created PR")
-            
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Git operation failed: {sanitize_output(str(e))}")
-        if e.stderr:
-            print(f"Error details: {sanitize_output(e.stderr)}")
-        raise
-    except Exception as e:
-        print(f"❌ Error in push_and_open_pr: {sanitize_output(str(e))}")
-        raise
-
 def main():
+    _ensure_config()
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Simulate changes without writing files or pushing PR")
     parser.add_argument("--use-index", action="store_true", default=True, help="Use semantic indexes for faster file discovery (default: True)")
@@ -1669,11 +1399,12 @@ def main():
                     # Go back to repo root for git operations
                     os.chdir("..")
                     # Create and switch to docs branch
+                    branch_name = get_branch_name(os.environ.get("PR_NUMBER"))
                     try:
-                        run_command_safe(["git", "checkout", "-b", BRANCH_NAME], check=True)
+                        run_command_safe(["git", "checkout", "-b", branch_name], check=True)
                     except subprocess.CalledProcessError:
                         # Branch might already exist, try checking it out
-                        run_command_safe(["git", "checkout", BRANCH_NAME], check=True)
+                        run_command_safe(["git", "checkout", branch_name], check=True)
                     # Convert file paths to include docs subfolder prefix
                     docs_files = [f"{docs_subfolder}/{f}" if not f.startswith(docs_subfolder) else f for f in modified_files]
                     push_and_open_pr(docs_files, commit_info)
