@@ -87,8 +87,8 @@ class TestGetDocsRoot:
 class TestGetDocFolders:
     def test_finds_doc_folders(self, doc_tree):
         folders = get_doc_folders(docs_root=doc_tree)
-        assert "rados" in folders
-        assert "rbd" in folders
+        assert "guides" in folders
+        assert "tutorials" in folders
 
     def test_skips_hidden_dirs(self, doc_tree):
         folders = get_doc_folders(docs_root=doc_tree)
@@ -118,16 +118,16 @@ class TestGetDocFolders:
 
 class TestGetDocsInFolder:
     def test_finds_rst_files(self, doc_tree):
-        docs = get_docs_in_folder("rados", docs_root=doc_tree)
+        docs = get_docs_in_folder("guides", docs_root=doc_tree)
         names = [d.name for d in docs]
         assert "health-checks.rst" in names
         assert "monitoring.rst" in names
-        assert "osd-config-ref.rst" in names
+        assert "config-ref.rst" in names
 
     def test_finds_md_files(self, doc_tree):
-        docs = get_docs_in_folder("rbd", docs_root=doc_tree)
+        docs = get_docs_in_folder("tutorials", docs_root=doc_tree)
         names = [d.name for d in docs]
-        assert "rbd-operations.md" in names
+        assert "getting-started.md" in names
 
     def test_nonexistent_folder(self, doc_tree):
         docs = get_docs_in_folder("nonexistent", docs_root=doc_tree)
@@ -157,7 +157,7 @@ class TestManifest:
         original = {
             "version": "1.0",
             "folders": {
-                "rados": {"doc_hashes": {"file.rst": "abc123"}}
+                "guides": {"doc_hashes": {"file.rst": "abc123"}}
             }
         }
         save_manifest(original, docs_root=tmp_path)
@@ -178,19 +178,19 @@ class TestManifest:
 
 class TestGetFolderDocHashes:
     def test_returns_hashes_for_all_docs(self, doc_tree):
-        hashes = get_folder_doc_hashes("rados", docs_root=doc_tree)
-        assert len(hashes) == 3  # health-checks.rst, monitoring.rst, osd-config-ref.rst
+        hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
+        assert len(hashes) == 3  # health-checks.rst, monitoring.rst, config-ref.rst
 
     def test_hash_values_are_hex(self, doc_tree):
-        hashes = get_folder_doc_hashes("rados", docs_root=doc_tree)
+        hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
         for h in hashes.values():
             assert len(h) == 64  # SHA256 hex length
             assert all(c in "0123456789abcdef" for c in h)
 
     def test_keys_are_relative_paths(self, doc_tree):
-        hashes = get_folder_doc_hashes("rados", docs_root=doc_tree)
+        hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
         for key in hashes:
-            assert key.startswith("rados/")
+            assert key.startswith("guides/")
 
     def test_empty_folder(self, tmp_path):
         (tmp_path / "empty").mkdir()
@@ -204,28 +204,28 @@ class TestGetFolderDocHashes:
 class TestFolderNeedsReindex:
     def test_new_folder_needs_reindex(self, doc_tree):
         manifest = {"folders": {}}
-        assert folder_needs_reindex("rados", manifest, docs_root=doc_tree) is True
+        assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
 
     def test_unchanged_folder_no_reindex(self, doc_tree):
-        hashes = get_folder_doc_hashes("rados", docs_root=doc_tree)
-        manifest = {"folders": {"rados": {"doc_hashes": hashes}}}
-        assert folder_needs_reindex("rados", manifest, docs_root=doc_tree) is False
+        hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
+        manifest = {"folders": {"guides": {"doc_hashes": hashes}}}
+        assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is False
 
     def test_changed_file_triggers_reindex(self, doc_tree):
-        hashes = get_folder_doc_hashes("rados", docs_root=doc_tree)
-        manifest = {"folders": {"rados": {"doc_hashes": hashes}}}
+        hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
+        manifest = {"folders": {"guides": {"doc_hashes": hashes}}}
 
         # Modify a file
-        (doc_tree / "rados" / "operations" / "health-checks.rst").write_text("CHANGED")
-        assert folder_needs_reindex("rados", manifest, docs_root=doc_tree) is True
+        (doc_tree / "guides" / "operations" / "health-checks.rst").write_text("CHANGED")
+        assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
 
     def test_added_file_triggers_reindex(self, doc_tree):
-        hashes = get_folder_doc_hashes("rados", docs_root=doc_tree)
-        manifest = {"folders": {"rados": {"doc_hashes": hashes}}}
+        hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
+        manifest = {"folders": {"guides": {"doc_hashes": hashes}}}
 
         # Add a new file
-        (doc_tree / "rados" / "operations" / "new-doc.rst").write_text("New content")
-        assert folder_needs_reindex("rados", manifest, docs_root=doc_tree) is True
+        (doc_tree / "guides" / "operations" / "new-doc.rst").write_text("New content")
+        assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
 
 
 # ── Index save/load ──────────────────────────────────────────────────────────
@@ -233,33 +233,33 @@ class TestFolderNeedsReindex:
 
 class TestIndexSaveLoad:
     def test_save_creates_file(self, tmp_path):
-        save_index("rados", "Index content for rados", docs_root=tmp_path)
-        index_file = tmp_path / INDEX_DIR / "rados.index.md"
+        save_index("guides", "Index content for guides", docs_root=tmp_path)
+        index_file = tmp_path / INDEX_DIR / "guides.index.md"
         assert index_file.exists()
 
     def test_roundtrip(self, tmp_path):
-        content = "# RADOS Documentation Index\n\nCovers health checks and monitoring."
-        save_index("rados", content, docs_root=tmp_path)
-        loaded = load_index("rados", docs_root=tmp_path)
+        content = "# Guides Documentation Index\n\nCovers health checks and monitoring."
+        save_index("guides", content, docs_root=tmp_path)
+        loaded = load_index("guides", docs_root=tmp_path)
         assert loaded == content
 
     def test_load_missing_returns_none(self, tmp_path):
         assert load_index("nonexistent", docs_root=tmp_path) is None
 
     def test_load_all_indexes(self, tmp_path):
-        save_index("rados", "Rados index", docs_root=tmp_path)
-        save_index("rbd", "RBD index", docs_root=tmp_path)
+        save_index("guides", "Guides index", docs_root=tmp_path)
+        save_index("tutorials", "Tutorials index", docs_root=tmp_path)
         all_idx = load_all_indexes(docs_root=tmp_path)
-        assert "rados" in all_idx
-        assert "rbd" in all_idx
-        assert all_idx["rados"] == "Rados index"
+        assert "guides" in all_idx
+        assert "tutorials" in all_idx
+        assert all_idx["guides"] == "Guides index"
 
     def test_load_all_empty(self, tmp_path):
         all_idx = load_all_indexes(docs_root=tmp_path)
         assert all_idx == {}
 
     def test_indexes_exist_true(self, tmp_path):
-        save_index("rados", "content", docs_root=tmp_path)
+        save_index("guides", "content", docs_root=tmp_path)
         assert indexes_exist(docs_root=tmp_path) is True
 
     def test_indexes_exist_false(self, tmp_path):
@@ -275,17 +275,17 @@ class TestIndexSaveLoad:
 
 class TestGetFilesInAreas:
     def test_single_area(self, doc_tree):
-        files = get_files_in_areas(["rados"], docs_root=doc_tree)
+        files = get_files_in_areas(["guides"], docs_root=doc_tree)
         assert any("health-checks.rst" in f for f in files)
-        assert any("osd-config-ref.rst" in f for f in files)
+        assert any("config-ref.rst" in f for f in files)
 
     def test_multiple_areas(self, doc_tree):
-        files = get_files_in_areas(["rados", "rbd"], docs_root=doc_tree)
+        files = get_files_in_areas(["guides", "tutorials"], docs_root=doc_tree)
         assert any("health-checks.rst" in f for f in files)
-        assert any("rbd-operations.md" in f for f in files)
+        assert any("getting-started.md" in f for f in files)
 
     def test_includes_root_level_docs(self, doc_tree):
-        files = get_files_in_areas(["rados"], docs_root=doc_tree)
+        files = get_files_in_areas(["guides"], docs_root=doc_tree)
         assert "overview.rst" in files or any("overview.rst" in f for f in files)
 
     def test_nonexistent_area(self, doc_tree):
@@ -294,7 +294,7 @@ class TestGetFilesInAreas:
         assert isinstance(files, list)
 
     def test_deduplicated(self, doc_tree):
-        files = get_files_in_areas(["rados", "rados"], docs_root=doc_tree)
+        files = get_files_in_areas(["guides", "guides"], docs_root=doc_tree)
         assert len(files) == len(set(files))
 
 
@@ -306,8 +306,8 @@ class TestGetSummaryFilename:
         assert get_summary_filename("guide.rst") == "guide.rst.summary.md"
 
     def test_nested_path(self):
-        result = get_summary_filename("rados/operations/health-checks.rst")
-        assert result == "rados-operations-health-checks.rst.summary.md"
+        result = get_summary_filename("guides/operations/health-checks.rst")
+        assert result == "guides-operations-health-checks.rst.summary.md"
 
     def test_no_slashes_passthrough(self):
         result = get_summary_filename("README.md")
@@ -353,7 +353,7 @@ class TestSummaryCaching:
         if hasattr(load_cached_summary, '_debug_shown'):
             del load_cached_summary._debug_shown
 
-        file_path = "rados/operations/health-checks.rst"
+        file_path = "guides/operations/health-checks.rst"
         summary = "This file documents health checks for monitoring."
         save_summary(file_path, summary, docs_root=doc_tree)
 
@@ -364,7 +364,7 @@ class TestSummaryCaching:
         if hasattr(load_cached_summary, '_debug_shown'):
             del load_cached_summary._debug_shown
 
-        file_path = "rados/operations/health-checks.rst"
+        file_path = "guides/operations/health-checks.rst"
         save_summary(file_path, "Original summary", docs_root=doc_tree)
 
         # Modify the source file
@@ -377,11 +377,11 @@ class TestSummaryCaching:
         if hasattr(load_cached_summary, '_debug_shown'):
             del load_cached_summary._debug_shown
 
-        cached = load_cached_summary("rados/operations/health-checks.rst", docs_root=doc_tree)
+        cached = load_cached_summary("guides/operations/health-checks.rst", docs_root=doc_tree)
         assert cached is None
 
     def test_summaries_exist_true(self, doc_tree):
-        save_summary("rados/operations/health-checks.rst", "summary", docs_root=doc_tree)
+        save_summary("guides/operations/health-checks.rst", "summary", docs_root=doc_tree)
         assert summaries_exist(docs_root=doc_tree) is True
 
     def test_summaries_exist_false(self, tmp_path):
@@ -391,7 +391,7 @@ class TestSummaryCaching:
         if hasattr(load_cached_summary, '_debug_shown'):
             del load_cached_summary._debug_shown
 
-        file_path = "rados/operations/health-checks.rst"
+        file_path = "guides/operations/health-checks.rst"
         content = (doc_tree / file_path).read_text()
 
         # Save a cached summary
@@ -413,21 +413,21 @@ class TestSummaryCaching:
         if hasattr(load_cached_summary, '_debug_shown'):
             del load_cached_summary._debug_shown
 
-        file_path = "rbd/rbd-operations.md"
+        file_path = "tutorials/getting-started.md"
         content = (doc_tree / file_path).read_text()
 
         def fake_generator(fp, c):
-            return "Generated summary for RBD"
+            return "Generated summary for tutorials"
 
         result = get_or_generate_summary(file_path, content, fake_generator, docs_root=doc_tree)
-        assert result == "Generated summary for RBD"
+        assert result == "Generated summary for tutorials"
 
         # Verify it was cached
         cached = load_cached_summary(file_path, docs_root=doc_tree)
-        assert cached == "Generated summary for RBD"
+        assert cached == "Generated summary for tutorials"
 
     def test_save_summary_updates_manifest(self, doc_tree):
-        file_path = "rados/operations/health-checks.rst"
+        file_path = "guides/operations/health-checks.rst"
         save_summary(file_path, "Test summary", docs_root=doc_tree)
 
         manifest = load_summaries_manifest(docs_root=doc_tree)

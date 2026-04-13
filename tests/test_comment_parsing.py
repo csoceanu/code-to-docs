@@ -65,9 +65,9 @@ class TestParseUpdateInstructions:
         assert "guide.adoc" in file_inst
 
     def test_path_with_slashes(self):
-        comment = "[update-docs] rados/operations/pools.rst: update quota section"
+        comment = "[update-docs] guides/operations/pools.rst: update quota section"
         global_inst, file_inst = parse_update_instructions(comment)
-        assert "rados/operations/pools.rst" in file_inst
+        assert "guides/operations/pools.rst" in file_inst
 
     def test_blank_lines_skipped(self):
         comment = "[update-docs] be careful\n\npools.rst: update it\n\nhealth.md: fix it"
@@ -86,23 +86,23 @@ class TestParseUpdateInstructions:
 
 class TestResolveFileInstructions:
     def test_exact_match(self):
-        instructions = {"rados/operations/pools.rst": "update quota"}
-        result = _resolve_file_instructions("rados/operations/pools.rst", instructions)
+        instructions = {"guides/operations/pools.rst": "update quota"}
+        result = _resolve_file_instructions("guides/operations/pools.rst", instructions)
         assert result == "update quota"
 
     def test_basename_match(self):
         instructions = {"pools.rst": "update quota"}
-        result = _resolve_file_instructions("rados/operations/pools.rst", instructions)
+        result = _resolve_file_instructions("guides/operations/pools.rst", instructions)
         assert result == "update quota"
 
     def test_suffix_match(self):
         instructions = {"operations/pools.rst": "update quota"}
-        result = _resolve_file_instructions("rados/operations/pools.rst", instructions)
+        result = _resolve_file_instructions("guides/operations/pools.rst", instructions)
         assert result == "update quota"
 
     def test_no_match(self):
         instructions = {"other.rst": "update it"}
-        result = _resolve_file_instructions("rados/operations/pools.rst", instructions)
+        result = _resolve_file_instructions("guides/operations/pools.rst", instructions)
         assert result == ""
 
     def test_empty_instructions(self):

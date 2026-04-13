@@ -47,18 +47,18 @@ def tmp_tree(tmp_path):
 
 @pytest.fixture
 def doc_tree(tmp_path):
-    """Create a realistic documentation tree for doc_index tests.
+    """Create a generic documentation tree for doc_index tests.
 
     Structure:
         tmp_path/
-        ├── rados/
+        ├── guides/
         │   ├── operations/
         │   │   ├── health-checks.rst
         │   │   └── monitoring.rst
         │   └── configuration/
-        │       └── osd-config-ref.rst
-        ├── rbd/
-        │   └── rbd-operations.md
+        │       └── config-ref.rst
+        ├── tutorials/
+        │   └── getting-started.md
         ├── _build/           (should be skipped — underscore prefix)
         │   └── output.rst
         ├── .hidden/          (should be skipped — dot prefix)
@@ -66,25 +66,25 @@ def doc_tree(tmp_path):
         ├── overview.rst      (root-level doc, no folder)
         └── README.md         (root-level doc)
     """
-    # rados folder
-    ops = tmp_path / "rados" / "operations"
+    # guides folder
+    ops = tmp_path / "guides" / "operations"
     ops.mkdir(parents=True)
     (ops / "health-checks.rst").write_text(
-        "Health Checks\n=============\n\nMonitor health check reference."
+        "Health Checks\n=============\n\nHealth check reference."
     )
     (ops / "monitoring.rst").write_text(
-        "Monitoring\n==========\n\nHow to monitor your cluster."
+        "Monitoring\n==========\n\nHow to monitor your system."
     )
-    conf = tmp_path / "rados" / "configuration"
+    conf = tmp_path / "guides" / "configuration"
     conf.mkdir(parents=True)
-    (conf / "osd-config-ref.rst").write_text(
-        "OSD Config Ref\n==============\n\nOSD configuration options."
+    (conf / "config-ref.rst").write_text(
+        "Config Reference\n================\n\nConfiguration options."
     )
 
-    # rbd folder
-    rbd = tmp_path / "rbd"
-    rbd.mkdir()
-    (rbd / "rbd-operations.md").write_text("# RBD Operations\n\nBlock device ops.")
+    # tutorials folder
+    tutorials = tmp_path / "tutorials"
+    tutorials.mkdir()
+    (tutorials / "getting-started.md").write_text("# Getting Started\n\nA quick start guide.")
 
     # _build folder (should be skipped)
     build = tmp_path / "_build"
