@@ -496,12 +496,12 @@ def commit_indexes_to_repo(content_type="indexes"):
             repo_root = docs_root.parent
             os.chdir(str(repo_root))
             index_relative_path = f"{docs_subfolder}/{INDEX_DIR}"
-            print(f"DEBUG: Changed to repo root: {repo_root}, index path: {index_relative_path}")
+            print(f"Changed to repo root for git operations")
         else:
             # We're at repo root or in a separate docs repo
             os.chdir(str(docs_root))
             index_relative_path = INDEX_DIR
-            print(f"DEBUG: Staying in docs root: {docs_root}, index path: {index_relative_path}")
+            print(f"Using docs root for git operations")
         
         # Check if there are any changes to commit
         status_result = run_command_safe(
@@ -1082,7 +1082,7 @@ def load_cached_summary(file_path, docs_root=None):
     # Debug: show manifest state on first call
     manifest_files = manifest.get("files", {})
     if len(manifest_files) > 0 and not hasattr(load_cached_summary, '_debug_shown'):
-        print(f"DEBUG: Summaries manifest has {len(manifest_files)} entries")
+        print(f"Summaries manifest has {len(manifest_files)} entries")
         load_cached_summary._debug_shown = True
     
     # Check if we have a cached summary

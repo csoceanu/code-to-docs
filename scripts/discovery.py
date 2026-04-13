@@ -8,6 +8,7 @@ semantic indexes to narrow candidates before asking the AI to pick exact files.
 """
 
 import os
+import time
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -67,7 +68,7 @@ Provide a detailed summary that would help an AI system understand when this fil
             error_str = sanitize_output(str(e))
             wait_time = (attempt + 1) * 3
             print(f"Error for {file_path} (attempt {attempt + 1}/{max_retries}): {error_str}, waiting {wait_time}s...")
-            import time
+
             time.sleep(wait_time)
 
     raise Exception(f"Failed to summarize {file_path} after {max_retries} attempts")
@@ -118,7 +119,7 @@ def get_file_content_or_summaries(line_threshold=300):
         except Exception as e:
             print(f"Skipping file {path}: {sanitize_output(str(e))}")
 
-    print(f"DEBUG: Returning {len(file_data)} files for processing")
+    print(f"Collected {len(file_data)} files for processing")
     return file_data
 
 def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_retries=3):
@@ -164,7 +165,7 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
             result_text = (response.choices[0].message.content or "").strip()
             if not result_text:
                 if attempt < max_retries - 1:
-                    import time
+        
                     time.sleep(2 * (attempt + 1))
                     continue
                 return batch_num, []
@@ -186,7 +187,7 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
 
         except Exception as e:
             if attempt < max_retries - 1:
-                import time
+    
                 wait_time = 3 * (attempt + 1)
                 print(f"Batch {batch_num}: Error (attempt {attempt + 1}), waiting {wait_time}s...")
                 time.sleep(wait_time)
