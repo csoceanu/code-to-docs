@@ -160,9 +160,16 @@ _FILE_SELECTION_PROMPT_TEMPLATE = """
     """
 
 
+MAX_FILES_PER_BATCH = 10
+
+
 def _batch_file_previews_by_budget(file_previews, available_for_files):
     """
-    Split file previews into batches where each batch fits within the budget.
+    Split file previews into batches respecting both budget and max files per batch.
+
+    Batches are split when either the budget is full or the batch reaches
+    MAX_FILES_PER_BATCH files. Smaller batches produce better selection quality
+    because the LLM can give each file more attention.
 
     Args:
         file_previews: List of (file_path, preview_content) tuples
@@ -178,7 +185,8 @@ def _batch_file_previews_by_budget(file_previews, available_for_files):
     for fname, preview in file_previews:
         entry_size = len(f"File: {fname}\nPreview:\n{preview}") + 4  # separator overhead
 
-        if current_batch and current_size + entry_size > available_for_files:
+        if current_batch and (current_size + entry_size > available_for_files
+                              or len(current_batch) >= MAX_FILES_PER_BATCH):
             batches.append(current_batch)
             current_batch = []
             current_size = 0
