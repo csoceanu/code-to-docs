@@ -699,11 +699,13 @@ def commit_indexes_to_repo(content_type="indexes"):
                 # Branch is not up-to-date - be selective about what we push
                 print(f"⚠️  Branch is not up-to-date with {base_branch}")
 
-                if content_type == "indexes":
+                if "indexes" in content_type:
                     # For folder indexes: skip entirely (could overwrite newer indexes on main)
                     print(f"   Skipping index push to avoid overwriting newer indexes on {base_branch}")
-                    print(f"   Indexes will be used locally but not committed")
-                    return False
+                    if "summaries" not in content_type:
+                        print(f"   Indexes will be used locally but not committed")
+                        return False
+                    # Combined push — indexes can't be pushed but try summaries below
 
                 # For summaries: only push if doc content matches main (safe)
                 print(f"   Checking which summaries are safe to push...")

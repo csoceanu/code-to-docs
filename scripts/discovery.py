@@ -293,11 +293,6 @@ def find_relevant_files_optimized(diff):
             print(f"Updated indexes for: {updated}")
             indexes_changed = True
 
-    # Commit indexes to repo so they persist across runs
-    if indexes_changed:
-        print("Committing indexes to repository...")
-        commit_indexes_to_repo()
-
     # Stage 1: Find relevant AREAS using indexes (1 API call)
     print("Finding relevant documentation areas from indexes...")
     relevant_areas = find_relevant_areas_from_indexes(diff, get_client())
@@ -381,10 +376,17 @@ def find_relevant_files_optimized(diff):
     # Add files that didn't need summaries
     file_previews.extend(files_with_content)
 
-    # Commit summaries to repo so they persist across runs
-    if summaries_generated:
-        print("Committing file summaries to repository...")
-        commit_indexes_to_repo(content_type="summaries")
+    # Commit indexes and summaries in a single push to avoid the branch
+    # going stale between two separate pushes
+    if indexes_changed or summaries_generated:
+        content_parts = []
+        if indexes_changed:
+            content_parts.append("indexes")
+        if summaries_generated:
+            content_parts.append("summaries")
+        content_label = " and ".join(content_parts)
+        print(f"Committing {content_label} to repository...")
+        commit_indexes_to_repo(content_type=content_label)
 
     if not file_previews:
         return []
