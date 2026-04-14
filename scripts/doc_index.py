@@ -211,7 +211,7 @@ def get_folder_doc_hashes(folder, docs_root=None):
 def folder_needs_reindex(folder, manifest, docs_root=None):
     """
     Check if a folder needs its index regenerated.
-    
+
     Args:
         folder: Folder name
         manifest: The loaded manifest
@@ -219,10 +219,14 @@ def folder_needs_reindex(folder, manifest, docs_root=None):
     """
     if folder not in manifest.get("folders", {}):
         return True
-    
+
+    # Check if the index file actually exists (manifest may be stale)
+    if load_index(folder, docs_root) is None:
+        return True
+
     stored_hashes = manifest["folders"][folder].get("doc_hashes", {})
     current_hashes = get_folder_doc_hashes(folder, docs_root)
-    
+
     return stored_hashes != current_hashes
 
 
