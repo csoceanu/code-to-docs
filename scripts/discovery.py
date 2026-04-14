@@ -13,10 +13,10 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Import configuration
-from config import get_client, get_model_name
-
-# Import configuration
-from config import get_max_context_chars, truncate_diff, check_context_error
+from config import (
+    get_client, get_model_name, get_max_context_chars,
+    truncate_content, truncate_diff, check_context_error,
+)
 
 # Import security utilities
 from security_utils import sanitize_output
@@ -39,7 +39,8 @@ def summarize_long_file(file_path, content, max_retries=3):
     """Generate AI summary for the given file content with retry logic"""
     print(f"Generating summary for long file: {file_path}")
 
-    prompt = f"""
+    # Build prompt template without content to compute budget
+    prompt_template = f"""
 Analyze this documentation file and create a comprehensive summary that captures:
 
 1. **Primary Purpose**: What this file documents
@@ -50,10 +51,15 @@ Analyze this documentation file and create a comprehensive summary that captures
 
 File: {file_path}
 Content:
-{content}
+{{CONTENT_PLACEHOLDER}}
 
 Provide a detailed summary that would help an AI system understand when this file should be updated based on code changes.
 """
+
+    content_budget = get_max_context_chars() - len(prompt_template)
+    truncated_content = truncate_content(content, content_budget, label=f"summary input for {file_path}")
+
+    prompt = prompt_template.replace("{CONTENT_PLACEHOLDER}", truncated_content)
 
     for attempt in range(max_retries):
         try:

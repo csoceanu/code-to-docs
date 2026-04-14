@@ -265,6 +265,9 @@ def _batch_docs_by_budget(docs_content, budget, prompt_overhead):
     """
     Split docs into batches where each batch fits within the budget at full content.
 
+    If a single file is larger than the available budget, it is truncated to fit
+    in its own batch.
+
     Args:
         docs_content: List of {"path": str, "content": str} dicts
         budget: Total character budget for the prompt
@@ -280,7 +283,22 @@ def _batch_docs_by_budget(docs_content, budget, prompt_overhead):
 
     for doc in docs_content:
         # Size of this file when formatted: "### File: path\n\ncontent" + separator
-        entry_size = len(f"### File: {doc['path']}\n\n{doc['content']}") + 10  # separator overhead
+        formatting_overhead = len(f"### File: {doc['path']}\n\n") + 10
+        entry_size = formatting_overhead + len(doc['content'])
+
+        # If a single file exceeds the budget, truncate it to fit in its own batch
+        if entry_size > available:
+            if current_batch:
+                batches.append(current_batch)
+                current_batch = []
+                current_size = 0
+            max_content = available - formatting_overhead
+            truncated_doc = {
+                "path": doc["path"],
+                "content": truncate_content(doc["content"], max_content, label=doc["path"]),
+            }
+            batches.append([truncated_doc])
+            continue
 
         if current_batch and current_size + entry_size > available:
             # Current batch is full, start a new one

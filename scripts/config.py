@@ -86,23 +86,21 @@ def truncate_diff(diff_text, max_chars, label="diff"):
     if not diff_text or len(diff_text) <= max_chars:
         return diff_text
 
+    # Guard against negative or zero budget
+    if max_chars <= 0:
+        print(f"Warning: No budget remaining for {label}, skipping diff entirely")
+        return f"[... diff omitted: prompt content already exceeds context budget ...]"
+
     # Split into per-file sections
     parts = re.split(r'(?=\ndiff --git )', diff_text)
 
-    # Handle the first part (may or may not start with "diff --git")
-    if diff_text.startswith("diff --git "):
-        file_diffs = parts
-    else:
-        # First part is preamble before any file diff
-        file_diffs = parts
-
-    total_files = sum(1 for p in file_diffs if "diff --git " in p)
+    total_files = sum(1 for p in parts if "diff --git " in p)
 
     # Greedily include complete file-diffs
     result = ""
     included = 0
 
-    for part in file_diffs:
+    for part in parts:
         is_file_diff = "diff --git " in part
         suffix = f"\n\n[... truncated: showing {included}/{total_files} changed files, kept {len(result):,} of {len(diff_text):,} chars ...]"
 
