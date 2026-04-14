@@ -226,50 +226,9 @@ def folder_needs_reindex(folder, manifest, docs_root=None):
     return stored_hashes != current_hashes
 
 
-def build_index_for_folder(folder, client=None):
-    """
-    Build a semantic index for a documentation folder.
-    
-    The index includes:
-    - Overview of what the folder documents
-    - Summary of each file's purpose
-    - Description of what code changes would affect this documentation
-    - Key technical terms and concepts
-    """
-    if client is None:
-        client = get_client()
-    
-    docs = get_docs_in_folder(folder)
-    if not docs:
-        return None
-    
-    # Gather content from all docs in the folder
-    docs_content = []
-    for doc in docs:
-        try:
-            content = doc.read_text(encoding='utf-8')
-            docs_content.append({
-                "path": str(doc),
-                "content": content
-            })
-        except Exception as e:
-            print(f"Warning: Could not read {doc}: {sanitize_output(str(e))}")
-
-    if not docs_content:
-        return None
-
-    # Budget-aware per-file truncation
-    # The prompt template below is ~800 chars; compute dynamically to be precise
-    prompt_template_overhead = 800  # approximate static prompt text around the docs
-    budget = get_max_context_chars()
-    per_file_budget = max(5000, (budget - prompt_template_overhead) // max(len(docs_content), 1))
-
-    docs_text = "\n\n---\n\n".join([
-        f"### File: {d['path']}\n\n{truncate_content(d['content'], per_file_budget, label=d['path'])}"
-        for d in docs_content
-    ])
-    
-    prompt = f"""
+def _build_index_prompt(folder, docs_text):
+    """Build the index generation prompt for a folder with given docs content."""
+    return f"""
 Analyze these documentation files from the "{folder}" folder and create a comprehensive semantic index.
 
 Documentation Files:
@@ -297,16 +256,143 @@ Generate a structured index in the following format:
 Be thorough - this index will be used to automatically match code changes to documentation that needs updates.
 """
 
-    try:
-        model_name = get_model_name()
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return (response.choices[0].message.content or "").strip()
-    except Exception as e:
-        print(f"Error generating index for {folder}: {sanitize_output(str(e))}")
+
+def _batch_docs_by_budget(docs_content, budget, prompt_overhead):
+    """
+    Split docs into batches where each batch fits within the budget at full content.
+
+    Args:
+        docs_content: List of {"path": str, "content": str} dicts
+        budget: Total character budget for the prompt
+        prompt_overhead: Characters used by the prompt template (excluding docs)
+
+    Returns:
+        list[list]: List of batches, each batch is a list of doc dicts
+    """
+    available = budget - prompt_overhead
+    batches = []
+    current_batch = []
+    current_size = 0
+
+    for doc in docs_content:
+        # Size of this file when formatted: "### File: path\n\ncontent" + separator
+        entry_size = len(f"### File: {doc['path']}\n\n{doc['content']}") + 10  # separator overhead
+
+        if current_batch and current_size + entry_size > available:
+            # Current batch is full, start a new one
+            batches.append(current_batch)
+            current_batch = []
+            current_size = 0
+
+        current_batch.append(doc)
+        current_size += entry_size
+
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches
+
+
+def build_index_for_folder(folder, client=None):
+    """
+    Build a semantic index for a documentation folder.
+
+    If all files fit within the context budget at full content, processes in a
+    single API call. Otherwise, batches files into groups that fit the budget,
+    makes one call per batch, and concatenates the partial indexes.
+
+    The index includes:
+    - Overview of what the folder documents
+    - Summary of each file's purpose
+    - Description of what code changes would affect this documentation
+    - Key technical terms and concepts
+    """
+    if client is None:
+        client = get_client()
+
+    docs = get_docs_in_folder(folder)
+    if not docs:
         return None
+
+    # Gather content from all docs in the folder
+    docs_content = []
+    for doc in docs:
+        try:
+            content = doc.read_text(encoding='utf-8')
+            docs_content.append({
+                "path": str(doc),
+                "content": content
+            })
+        except Exception as e:
+            print(f"Warning: Could not read {doc}: {sanitize_output(str(e))}")
+
+    if not docs_content:
+        return None
+
+    budget = get_max_context_chars()
+    # Measure actual prompt overhead (template without docs)
+    prompt_overhead = len(_build_index_prompt(folder, ""))
+
+    # Check if all files fit in a single call
+    total_content_size = sum(
+        len(f"### File: {d['path']}\n\n{d['content']}") + 10
+        for d in docs_content
+    )
+
+    if total_content_size + prompt_overhead <= budget:
+        # All files fit — single call with full content
+        docs_text = "\n\n---\n\n".join([
+            f"### File: {d['path']}\n\n{d['content']}"
+            for d in docs_content
+        ])
+        prompt = _build_index_prompt(folder, docs_text)
+
+        try:
+            model_name = get_model_name()
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return (response.choices[0].message.content or "").strip()
+        except Exception as e:
+            print(f"Error generating index for {folder}: {sanitize_output(str(e))}")
+            return None
+
+    # Files don't fit in one call — batch them
+    batches = _batch_docs_by_budget(docs_content, budget, prompt_overhead)
+    print(f"  Folder '{folder}' has {len(docs_content)} files ({total_content_size:,} chars) — processing in {len(batches)} batches")
+
+    partial_indexes = []
+    model_name = get_model_name()
+
+    for i, batch in enumerate(batches, 1):
+        docs_text = "\n\n---\n\n".join([
+            f"### File: {d['path']}\n\n{d['content']}"
+            for d in batch
+        ])
+        print(f"  Batch {i}/{len(batches)}: {len(batch)} files")
+
+        prompt = _build_index_prompt(folder, docs_text)
+
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            result = (response.choices[0].message.content or "").strip()
+            if result:
+                partial_indexes.append(result)
+        except Exception as e:
+            print(f"Error generating index for {folder} batch {i}: {sanitize_output(str(e))}")
+
+    if not partial_indexes:
+        return None
+
+    if len(partial_indexes) == 1:
+        return partial_indexes[0]
+
+    # Concatenate partial indexes
+    return "\n\n---\n\n".join(partial_indexes)
 
 
 def build_index_for_folder_with_retry(folder, client=None, max_retries=3):
