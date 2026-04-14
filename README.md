@@ -129,6 +129,7 @@ Add these in **Settings → Secrets → Actions**:
 | `JIRA_USERNAME` | _(Optional, for `[review-feature]`)_ Jira username/email |
 | `JIRA_API_TOKEN` | _(Optional, for `[review-feature]`)_ Jira API token ([create here](https://id.atlassian.com/manage-profile/security/api-tokens)) |
 | `GOOGLE_SA_KEY` | _(Optional, for `[review-feature]`)_ Google service account JSON key for fetching Google Docs. Docs must be shared with the service account email. |
+| `MAX_CONTEXT_CHARS` | _(Optional)_ Maximum characters for LLM prompt content (default: `400000`, ~100K tokens). Decrease for models with smaller context windows (e.g., `32000` for an 8K-token model). |
 
 ### Supported Model Backends
 
