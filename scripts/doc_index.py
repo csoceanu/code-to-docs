@@ -391,8 +391,53 @@ def build_index_for_folder(folder, client=None):
     if len(partial_indexes) == 1:
         return partial_indexes[0]
 
-    # Concatenate partial indexes
-    return "\n\n---\n\n".join(partial_indexes)
+    # Merge partial indexes into a single coherent index
+    print(f"  Merging {len(partial_indexes)} partial indexes into one...")
+    combined = "\n\n---\n\n".join(partial_indexes)
+
+    merge_prompt = f"""
+You are given {len(partial_indexes)} partial documentation indexes for the "{folder}" folder.
+Each was generated from a different batch of files. They have overlapping structure
+(each has its own Overview, Files Summary, etc.).
+
+Merge them into a single, unified index with NO duplicate sections.
+
+PARTIAL INDEXES:
+{combined}
+
+OUTPUT FORMAT — produce exactly ONE index with these sections:
+
+# {folder.upper()} Documentation Index
+
+## Overview
+[Merge the overviews into one coherent 2-3 sentence description]
+
+## Files Summary
+[Combine ALL file summaries from all partials into one list — no duplicates]
+
+## Code Changes That Would Require Documentation Updates
+[Merge and deduplicate all entries]
+
+## Key Technical Concepts
+[Merge and deduplicate all entries]
+
+## Related Components
+[Merge and deduplicate all entries]
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": merge_prompt}],
+        )
+        merged = (response.choices[0].message.content or "").strip()
+        if merged:
+            return merged
+    except Exception as e:
+        print(f"Warning: Could not merge partial indexes for {folder}: {sanitize_output(str(e))}")
+
+    # Fallback: return concatenated if merge fails
+    return combined
 
 
 def build_index_for_folder_with_retry(folder, client=None, max_retries=3):
