@@ -42,7 +42,6 @@ def get_branch_name(pr_number=None):
 # =============================================================================
 
 _DEFAULT_MAX_CONTEXT_CHARS = 400_000
-_context_budget_logged = False
 
 
 def get_max_context_chars():
@@ -50,30 +49,16 @@ def get_max_context_chars():
     Get the maximum character budget for LLM prompt content.
 
     Reads from MAX_CONTEXT_CHARS env var, defaults to 400,000 (~100K tokens).
-    Logs the source once on first call.
     """
-    global _context_budget_logged
-
     raw = os.environ.get("MAX_CONTEXT_CHARS", "")
     if raw:
         try:
             value = int(raw)
         except ValueError:
-            value = _DEFAULT_MAX_CONTEXT_CHARS
-            if not _context_budget_logged:
-                print(f"Warning: Invalid MAX_CONTEXT_CHARS='{raw}', using default {_DEFAULT_MAX_CONTEXT_CHARS:,}")
-                _context_budget_logged = True
-            return value
-        source = "MAX_CONTEXT_CHARS"
-    else:
-        value = _DEFAULT_MAX_CONTEXT_CHARS
-        source = "default"
-
-    if not _context_budget_logged:
-        print(f"Context budget: {value:,} chars (from {source})")
-        _context_budget_logged = True
-
-    return value
+            print(f"Warning: Invalid MAX_CONTEXT_CHARS='{raw}', using default {_DEFAULT_MAX_CONTEXT_CHARS:,}")
+            return _DEFAULT_MAX_CONTEXT_CHARS
+        return value
+    return _DEFAULT_MAX_CONTEXT_CHARS
 
 
 def truncate_content(text, max_chars, label="content"):

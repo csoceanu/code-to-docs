@@ -14,33 +14,23 @@ from config import get_max_context_chars, truncate_content, truncate_diff, check
 
 class TestGetMaxContextChars:
     def test_returns_default_when_env_not_set(self, monkeypatch):
-        import config
-        config._context_budget_logged = False
         monkeypatch.delenv("MAX_CONTEXT_CHARS", raising=False)
         assert get_max_context_chars() == 400_000
 
     def test_reads_from_env_var(self, monkeypatch):
-        import config
-        config._context_budget_logged = False
         monkeypatch.setenv("MAX_CONTEXT_CHARS", "50000")
         assert get_max_context_chars() == 50_000
 
     def test_falls_back_on_invalid_value(self, monkeypatch):
-        import config
-        config._context_budget_logged = False
         monkeypatch.setenv("MAX_CONTEXT_CHARS", "not_a_number")
         assert get_max_context_chars() == 400_000
 
-    def test_logs_source_once(self, monkeypatch, capsys):
-        import config
-        config._context_budget_logged = False
-        monkeypatch.setenv("MAX_CONTEXT_CHARS", "80000")
+    def test_warns_on_invalid_value(self, monkeypatch, capsys):
+        monkeypatch.setenv("MAX_CONTEXT_CHARS", "not_a_number")
         get_max_context_chars()
-        get_max_context_chars()  # second call should not log
         output = capsys.readouterr().out
-        assert output.count("Context budget:") == 1
-        assert "80,000" in output
-        assert "MAX_CONTEXT_CHARS" in output
+        assert "Warning" in output
+        assert "not_a_number" in output
 
 
 # =============================================================================

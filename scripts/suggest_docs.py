@@ -21,7 +21,7 @@ import argparse
 import difflib
 from pathlib import Path
 
-from config import get_client, get_model_name, get_branch_name
+from config import get_client, get_model_name, get_branch_name, get_max_context_chars
 from github_ops import get_diff, get_commit_info, setup_docs_environment, push_and_open_pr
 from discovery import find_relevant_files_optimized, ask_ai_for_relevant_files, get_file_content_or_summaries
 from generation import generate_updates_parallel, load_full_content, ask_ai_for_updated_content, overwrite_file
@@ -49,6 +49,12 @@ def main():
     parser.add_argument("--parallel-updates", action="store_true", default=True, help="Generate updates in parallel (default: True)")
     parser.add_argument("--max-workers", type=int, default=5, help="Max parallel workers for update generation (default: 5)")
     args = parser.parse_args()
+
+    # Log context budget once at startup
+    budget = get_max_context_chars()
+    raw = os.environ.get("MAX_CONTEXT_CHARS", "")
+    source = "MAX_CONTEXT_CHARS" if raw else "default"
+    print(f"Context budget: {budget:,} chars (from {source})")
 
     # Handle --build-index mode
     if args.build_index:
