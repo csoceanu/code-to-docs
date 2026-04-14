@@ -15,6 +15,7 @@ import shutil
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from config import get_max_context_chars, truncate_diff, check_context_error
 from security_utils import sanitize_output, run_command_safe
 
 
@@ -402,7 +403,8 @@ def analyze_feature_coverage(diff, jira_context, llm_client, model_name, user_in
             feature_context += f"- {link}\n"
         feature_context += "\n"
 
-    prompt = f"""
+    # Build prompt template without diff to compute budget
+    prompt_template = f"""
 You are a senior code reviewer comparing a PR's code changes against the feature
 requirements defined in a Jira ticket and its linked specification documents.
 
@@ -410,7 +412,7 @@ requirements defined in a Jira ticket and its linked specification documents.
 
 ## PR Code Diff
 ```
-{diff[:15000]}
+{{DIFF_PLACEHOLDER}}
 ```
 
 ## Your Task
@@ -456,11 +458,15 @@ what the expected deliverables are.
 """
 
     if user_instructions:
-        prompt += f"""
+        prompt_template += f"""
 
 ## Additional Instructions from Reviewer
 {user_instructions}
 """
+
+    diff_budget = get_max_context_chars() - len(prompt_template)
+    truncated_diff = truncate_diff(diff, diff_budget, label="feature-coverage diff")
+    prompt = prompt_template.replace("{DIFF_PLACEHOLDER}", truncated_diff)
 
     try:
         response = llm_client.chat.completions.create(
@@ -469,6 +475,7 @@ what the expected deliverables are.
         )
         return (response.choices[0].message.content or "").strip() or "Error: Empty response"
     except Exception as e:
+        check_context_error(e)
         return f"Error generating analysis: {sanitize_output(str(e))}"
 
 

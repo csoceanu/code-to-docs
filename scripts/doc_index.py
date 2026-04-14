@@ -29,7 +29,7 @@ import time
 _manifest_lock = threading.Lock()
 
 # Import configuration
-from config import get_client, get_model_name
+from config import get_client, get_model_name, get_max_context_chars, truncate_content, truncate_diff, check_context_error
 
 # Import security utilities for safe output
 from security_utils import sanitize_output, run_command_safe
@@ -248,22 +248,24 @@ def build_index_for_folder(folder, client=None):
     for doc in docs:
         try:
             content = doc.read_text(encoding='utf-8')
-            # Truncate very long files to avoid token limits
-            if len(content) > 50000:
-                content = content[:50000] + "\n\n[... truncated for length ...]"
             docs_content.append({
                 "path": str(doc),
                 "content": content
             })
         except Exception as e:
             print(f"Warning: Could not read {doc}: {sanitize_output(str(e))}")
-    
+
     if not docs_content:
         return None
-    
-    # Format docs for the prompt - use more content for better understanding
+
+    # Budget-aware per-file truncation
+    # The prompt template below is ~800 chars; compute dynamically to be precise
+    prompt_template_overhead = 800  # approximate static prompt text around the docs
+    budget = get_max_context_chars()
+    per_file_budget = max(5000, (budget - prompt_template_overhead) // max(len(docs_content), 1))
+
     docs_text = "\n\n---\n\n".join([
-        f"### File: {d['path']}\n\n{d['content'][:20000]}"  # First 20000 chars per file for better context
+        f"### File: {d['path']}\n\n{truncate_content(d['content'], per_file_budget, label=d['path'])}"
         for d in docs_content
     ])
     
@@ -724,13 +726,14 @@ def find_relevant_areas_from_indexes(diff, client=None):
             f"## Documentation Area: {folder}\n\n{indexes[folder]}"
             for folder in batch_folders
         ])
-        
-        prompt = f"""
+
+        # Build prompt template without diff to measure its length
+        prompt_template = f"""
 You are analyzing a code diff to determine which documentation areas might need updates.
 
 CODE DIFF:
 ```
-{diff[:10000]}
+{{DIFF_PLACEHOLDER}}
 ```
 
 DOCUMENTATION AREAS TO EVALUATE (batch {batch_num}/{total_batches}):
@@ -763,6 +766,9 @@ IMPORTANT: You MUST respond with a valid JSON array. No other text or explanatio
 
 You MUST output something. An empty response is not valid - output [] instead.
 """
+        diff_budget = get_max_context_chars() - len(prompt_template)
+        truncated_diff = truncate_diff(diff, diff_budget, label=f"area-relevance diff (batch {batch_num})")
+        prompt = prompt_template.replace("{DIFF_PLACEHOLDER}", truncated_diff)
         
         batch_relevant = _process_area_batch(client, prompt, batch_num, total_batches, batch_folders)
         if batch_relevant:
@@ -858,7 +864,9 @@ def _process_area_batch(client, prompt, batch_num, total_batches, batch_folders)
             print(f"Batch {batch_num}/{total_batches}: JSON parse failed, skipping batch")
             return []
         except Exception as e:
-            # Retry on any exception
+            # Context-window errors won't resolve on retry — fail immediately
+            if check_context_error(e):
+                return []
             if attempt < max_retries - 1:
                 wait_time = calc_backoff_delay(attempt, multiplier=3)
                 print(f"Batch {batch_num}/{total_batches}: Error (attempt {attempt + 1}), waiting {wait_time}s...")
@@ -866,7 +874,7 @@ def _process_area_batch(client, prompt, batch_num, total_batches, batch_folders)
                 continue
             print(f"Batch {batch_num}/{total_batches}: Failed after retries - {sanitize_output(str(e))}")
             return []
-    
+
     return []
 
 

@@ -15,6 +15,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Import configuration
 from config import get_client, get_model_name
 
+# Import configuration
+from config import get_max_context_chars, truncate_diff, check_context_error
+
 # Import security utilities
 from security_utils import sanitize_output
 from utils import calc_backoff_delay
@@ -129,11 +132,12 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
         [f"File: {fname}\nPreview:\n{preview}" for fname, preview in batch]
     )
 
-    prompt = f"""
+    # Build prompt template without diff to compute budget
+    prompt_template = f"""
     You are an ULTRA-CONSERVATIVE documentation assistant. Select ONLY files that DIRECTLY document the EXACT code being changed.
 
     Git diff from this PR:
-    {diff}
+    {{DIFF_PLACEHOLDER}}
 
     Documentation files to evaluate:
     {context}
@@ -155,6 +159,10 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
     Return ONLY file paths (one per line) that DIRECTLY match the code changes.
     If no files need updates, return "NONE".
     """
+
+    diff_budget = get_max_context_chars() - len(prompt_template)
+    truncated_diff = truncate_diff(diff, diff_budget, label=f"file-selection diff (batch {batch_num})")
+    prompt = prompt_template.replace("{DIFF_PLACEHOLDER}", truncated_diff)
 
     for attempt in range(max_retries):
         try:
@@ -186,6 +194,8 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
             return batch_num, filtered_files
 
         except Exception as e:
+            if check_context_error(e):
+                return batch_num, []
             if attempt < max_retries - 1:
                 wait_time = calc_backoff_delay(attempt, multiplier=3)
                 print(f"Batch {batch_num}: Error (attempt {attempt + 1}), waiting {wait_time}s...")
@@ -357,8 +367,8 @@ def find_relevant_files_optimized(diff):
                     return (file_path, summary)
                 except Exception as e:
                     print(f"Error summarizing {file_path}: {sanitize_output(str(e))}")
-                    # Fallback to truncated content
-                    return (file_path, content[:5000] + "\n... [truncated]")
+                    # Fallback to full content — downstream prompt handles truncation
+                    return (file_path, content)
 
             with ThreadPoolExecutor(max_workers=5) as executor:
                 futures = {executor.submit(generate_summary_task, args): args[0]

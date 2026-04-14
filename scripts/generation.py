@@ -12,7 +12,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Import configuration
-from config import get_client, get_model_name
+from config import get_client, get_model_name, get_max_context_chars, truncate_diff, check_context_error
 
 # Import security utilities
 from security_utils import sanitize_output, validate_file_path, validate_docs_file_extension
@@ -163,14 +163,15 @@ FORMATTING REQUIREMENTS:
 """
         format_name = "the existing format"
 
-    prompt = f"""
+    # Build prompt template without diff to compute budget
+    prompt_template = f"""
 You are updating documentation based on a code diff. Be EXTREMELY conservative.
 
 {format_instructions}
 - Ensure consistent indentation and spacing
 
 Git diff:
-{diff}
+{{DIFF_PLACEHOLDER}}
 
 Current documentation file `{file_path}`:
 --------------------
@@ -216,21 +217,29 @@ Return ONLY:
             combined_instructions.append(f"For this file specifically: {per_file}")
 
     if combined_instructions:
-        prompt += f"""
+        prompt_template += f"""
 
 ADDITIONAL INSTRUCTIONS FROM THE REVIEWER:
 The human reviewer has provided the following guidance. Follow these instructions carefully:
 {chr(10).join(combined_instructions)}
 """
 
+    diff_budget = get_max_context_chars() - len(prompt_template)
+    truncated_diff = truncate_diff(diff, diff_budget, label=f"update diff for {file_path}")
+    prompt = prompt_template.replace("{DIFF_PLACEHOLDER}", truncated_diff)
+
     client = get_client()
     model_name = get_model_name()
 
-    response = client.chat.completions.create(
-        model=model_name,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return (response.choices[0].message.content or "").strip()
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return (response.choices[0].message.content or "").strip()
+    except Exception as e:
+        check_context_error(e)
+        raise
 
 def overwrite_file(file_path, new_content):
     """
