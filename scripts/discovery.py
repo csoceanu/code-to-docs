@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Import configuration
 from config import (
     get_client, get_model_name, get_max_context_chars,
-    truncate_content, truncate_diff, check_context_error,
+    truncate_content, check_context_error,
 )
 
 # Import security utilities
@@ -132,21 +132,14 @@ def get_file_content_or_summaries(line_threshold=300):
     print(f"Collected {len(file_data)} files for processing")
     return file_data
 
-def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_retries=3):
-    """Process a single batch of files for relevance selection."""
-    context = "\n\n".join(
-        [f"File: {fname}\nPreview:\n{preview}" for fname, preview in batch]
-    )
-
-    # Build prompt template without diff to compute budget
-    prompt_template = f"""
+_FILE_SELECTION_PROMPT_TEMPLATE = """
     You are an ULTRA-CONSERVATIVE documentation assistant. Select ONLY files that DIRECTLY document the EXACT code being changed.
 
     Git diff from this PR:
-    {{DIFF_PLACEHOLDER}}
+    {DIFF_PLACEHOLDER}
 
     Documentation files to evaluate:
-    {context}
+    {CONTEXT_PLACEHOLDER}
 
     STRICT SELECTION RULES:
     1. ONLY select files that document the EXACT code, module, or component being modified in the diff
@@ -166,9 +159,46 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
     If no files need updates, return "NONE".
     """
 
-    diff_budget = get_max_context_chars() - len(prompt_template)
-    truncated_diff = truncate_diff(diff, diff_budget, label=f"file-selection diff (batch {batch_num})")
-    prompt = prompt_template.replace("{DIFF_PLACEHOLDER}", truncated_diff)
+
+def _batch_file_previews_by_budget(file_previews, available_for_files):
+    """
+    Split file previews into batches where each batch fits within the budget.
+
+    Args:
+        file_previews: List of (file_path, preview_content) tuples
+        available_for_files: Character budget available for file context
+
+    Returns:
+        list[list]: List of batches, each batch is a list of (path, preview) tuples
+    """
+    batches = []
+    current_batch = []
+    current_size = 0
+
+    for fname, preview in file_previews:
+        entry_size = len(f"File: {fname}\nPreview:\n{preview}") + 4  # separator overhead
+
+        if current_batch and current_size + entry_size > available_for_files:
+            batches.append(current_batch)
+            current_batch = []
+            current_size = 0
+
+        current_batch.append((fname, preview))
+        current_size += entry_size
+
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches
+
+
+def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_retries=3):
+    """Process a single batch of files for relevance selection."""
+    context = "\n\n".join(
+        [f"File: {fname}\nPreview:\n{preview}" for fname, preview in batch]
+    )
+
+    prompt = _FILE_SELECTION_PROMPT_TEMPLATE.replace("{DIFF_PLACEHOLDER}", diff).replace("{CONTEXT_PLACEHOLDER}", context)
 
     for attempt in range(max_retries):
         try:
@@ -215,14 +245,15 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
 
 def ask_ai_for_relevant_files(diff, file_previews, max_workers=5):
     all_relevant_files = []
-    batch_size = 10
 
-    # Create batches
-    batches = []
-    for i in range(0, len(file_previews), batch_size):
-        batch = file_previews[i:i + batch_size]
-        batch_num = (i // batch_size) + 1
-        batches.append((batch, batch_num))
+    # Compute budget available for file previews (diff size already validated at startup)
+    budget = get_max_context_chars()
+    prompt_overhead = len(_FILE_SELECTION_PROMPT_TEMPLATE)
+    available_for_files = budget - prompt_overhead - len(diff)
+
+    # Create budget-aware batches
+    batches_raw = _batch_file_previews_by_budget(file_previews, available_for_files)
+    batches = [(batch, i + 1) for i, batch in enumerate(batches_raw)]
 
     total_batches = len(batches)
     print(f"Processing {len(file_previews)} files in {total_batches} batches (parallel, {max_workers} workers)...")
@@ -235,7 +266,7 @@ def ask_ai_for_relevant_files(diff, file_previews, max_workers=5):
         }
 
         for future in as_completed(futures):
-            batch_num, files = future.result()
+            _, files = future.result()
             all_relevant_files.extend(files)
 
     # Strip DOCS_SUBFOLDER prefix if AI included it (common issue)

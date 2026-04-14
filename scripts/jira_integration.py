@@ -15,7 +15,7 @@ import shutil
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from config import get_max_context_chars, truncate_diff, check_context_error
+from config import get_max_context_chars, check_context_error
 from security_utils import sanitize_output, run_command_safe
 
 
@@ -464,9 +464,17 @@ what the expected deliverables are.
 {user_instructions}
 """
 
-    diff_budget = get_max_context_chars() - len(prompt_template)
-    truncated_diff = truncate_diff(diff, diff_budget, label="feature-coverage diff")
-    prompt = prompt_template.replace("{DIFF_PLACEHOLDER}", truncated_diff)
+    total_size = len(prompt_template) + len(diff)
+    budget = get_max_context_chars()
+    if total_size > budget:
+        return (
+            f"Error: The combined size of the diff, Jira ticket, spec docs, and prompt "
+            f"({total_size:,} chars) exceeds the context budget ({budget:,} chars). "
+            f"The analysis would be incomplete.\n\n"
+            f"Increase `MAX_CONTEXT_CHARS` to at least {total_size:,} to run this analysis."
+        )
+
+    prompt = prompt_template.replace("{DIFF_PLACEHOLDER}", diff)
 
     try:
         response = llm_client.chat.completions.create(

@@ -149,6 +149,18 @@ def main():
         print("No changes detected.")
         return
 
+    # Check if diff is too large for the context budget
+    # The pipeline needs room for prompt templates (~2K), file previews, and doc content.
+    # If the diff alone takes 90%+ of the budget, there's not enough room.
+    diff_ratio = len(diff) / budget
+    if diff_ratio > 0.9:
+        print(f"Error: Diff is too large ({len(diff):,} chars) for the context budget ({budget:,} chars). "
+              f"The diff uses {diff_ratio:.0%} of the budget, leaving insufficient room for documentation content.")
+        print(f"Options:")
+        print(f"  - Increase MAX_CONTEXT_CHARS (current: {budget:,})")
+        print(f"  - Split the PR into smaller changes")
+        return
+
     # Get commit info before switching to docs repo
     commit_info = get_commit_info()
     if commit_info:

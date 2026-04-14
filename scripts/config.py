@@ -88,7 +88,8 @@ def truncate_diff(diff_text, max_chars, label="diff"):
 
     # Guard against negative or zero budget
     if max_chars <= 0:
-        print(f"Warning: No budget remaining for {label}, skipping diff entirely")
+        print(f"Warning: No budget remaining for {label}, skipping diff entirely. "
+              f"Consider increasing MAX_CONTEXT_CHARS or reducing PR size.")
         return f"[... diff omitted: prompt content already exceeds context budget ...]"
 
     # Split into per-file sections
@@ -142,7 +143,7 @@ def check_context_error(e):
         ]):
             print(
                 "Error: Prompt exceeded model context window. "
-                "Set max-context-chars to a lower value "
+                "Set MAX_CONTEXT_CHARS to a lower value "
                 "(e.g. 32000 for an 8K-token model)."
             )
             return True

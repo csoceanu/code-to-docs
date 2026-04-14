@@ -181,7 +181,7 @@ class TestCheckContextError:
         )
         assert check_context_error(err) is True
         output = capsys.readouterr().out
-        assert "max-context-chars" in output
+        assert "MAX_CONTEXT_CHARS" in output
 
     def test_detects_token_limit_error(self, capsys):
         err = self._make_bad_request_error(
