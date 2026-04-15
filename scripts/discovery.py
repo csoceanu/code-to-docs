@@ -13,7 +13,10 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Import configuration
-from config import get_client, get_model_name
+from config import (
+    get_client, get_model_name, get_max_context_chars,
+    truncate_content, check_context_error,
+)
 
 # Import security utilities
 from security_utils import sanitize_output
@@ -36,7 +39,8 @@ def summarize_long_file(file_path, content, max_retries=3):
     """Generate AI summary for the given file content with retry logic"""
     print(f"Generating summary for long file: {file_path}")
 
-    prompt = f"""
+    # Build prompt template without content to compute budget
+    prompt_template = f"""
 Analyze this documentation file and create a comprehensive summary that captures:
 
 1. **Primary Purpose**: What this file documents
@@ -47,10 +51,15 @@ Analyze this documentation file and create a comprehensive summary that captures
 
 File: {file_path}
 Content:
-{content}
+{{CONTENT_PLACEHOLDER}}
 
 Provide a detailed summary that would help an AI system understand when this file should be updated based on code changes.
 """
+
+    content_budget = get_max_context_chars() - len(prompt_template)
+    truncated_content = truncate_content(content, content_budget, label=f"summary input for {file_path}")
+
+    prompt = prompt_template.replace("{CONTENT_PLACEHOLDER}", truncated_content)
 
     for attempt in range(max_retries):
         try:
@@ -123,20 +132,14 @@ def get_file_content_or_summaries(line_threshold=300):
     print(f"Collected {len(file_data)} files for processing")
     return file_data
 
-def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_retries=3):
-    """Process a single batch of files for relevance selection."""
-    context = "\n\n".join(
-        [f"File: {fname}\nPreview:\n{preview}" for fname, preview in batch]
-    )
-
-    prompt = f"""
+_FILE_SELECTION_PROMPT_TEMPLATE = """
     You are an ULTRA-CONSERVATIVE documentation assistant. Select ONLY files that DIRECTLY document the EXACT code being changed.
 
     Git diff from this PR:
-    {diff}
+    {DIFF_PLACEHOLDER}
 
     Documentation files to evaluate:
-    {context}
+    {CONTEXT_PLACEHOLDER}
 
     STRICT SELECTION RULES:
     1. ONLY select files that document the EXACT code, module, or component being modified in the diff
@@ -155,6 +158,55 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
     Return ONLY file paths (one per line) that DIRECTLY match the code changes.
     If no files need updates, return "NONE".
     """
+
+
+MAX_FILES_PER_BATCH = 10
+
+
+def _batch_file_previews_by_budget(file_previews, available_for_files):
+    """
+    Split file previews into batches respecting both budget and max files per batch.
+
+    Batches are split when either the budget is full or the batch reaches
+    MAX_FILES_PER_BATCH files. Smaller batches produce better selection quality
+    because the LLM can give each file more attention.
+
+    Args:
+        file_previews: List of (file_path, preview_content) tuples
+        available_for_files: Character budget available for file context
+
+    Returns:
+        list[list]: List of batches, each batch is a list of (path, preview) tuples
+    """
+    batches = []
+    current_batch = []
+    current_size = 0
+
+    for fname, preview in file_previews:
+        entry_size = len(f"File: {fname}\nPreview:\n{preview}") + 4  # separator overhead
+
+        if current_batch and (current_size + entry_size > available_for_files
+                              or len(current_batch) >= MAX_FILES_PER_BATCH):
+            batches.append(current_batch)
+            current_batch = []
+            current_size = 0
+
+        current_batch.append((fname, preview))
+        current_size += entry_size
+
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches
+
+
+def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_retries=3):
+    """Process a single batch of files for relevance selection."""
+    context = "\n\n".join(
+        [f"File: {fname}\nPreview:\n{preview}" for fname, preview in batch]
+    )
+
+    prompt = _FILE_SELECTION_PROMPT_TEMPLATE.replace("{DIFF_PLACEHOLDER}", diff).replace("{CONTEXT_PLACEHOLDER}", context)
 
     for attempt in range(max_retries):
         try:
@@ -186,6 +238,8 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
             return batch_num, filtered_files
 
         except Exception as e:
+            if check_context_error(e):
+                return batch_num, []
             if attempt < max_retries - 1:
                 wait_time = calc_backoff_delay(attempt, multiplier=3)
                 print(f"Batch {batch_num}: Error (attempt {attempt + 1}), waiting {wait_time}s...")
@@ -199,14 +253,15 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
 
 def ask_ai_for_relevant_files(diff, file_previews, max_workers=5):
     all_relevant_files = []
-    batch_size = 10
 
-    # Create batches
-    batches = []
-    for i in range(0, len(file_previews), batch_size):
-        batch = file_previews[i:i + batch_size]
-        batch_num = (i // batch_size) + 1
-        batches.append((batch, batch_num))
+    # Compute budget available for file previews (diff size already validated at startup)
+    budget = get_max_context_chars()
+    prompt_overhead = len(_FILE_SELECTION_PROMPT_TEMPLATE)
+    available_for_files = budget - prompt_overhead - len(diff)
+
+    # Create budget-aware batches
+    batches_raw = _batch_file_previews_by_budget(file_previews, available_for_files)
+    batches = [(batch, i + 1) for i, batch in enumerate(batches_raw)]
 
     total_batches = len(batches)
     print(f"Processing {len(file_previews)} files in {total_batches} batches (parallel, {max_workers} workers)...")
@@ -219,7 +274,7 @@ def ask_ai_for_relevant_files(diff, file_previews, max_workers=5):
         }
 
         for future in as_completed(futures):
-            batch_num, files = future.result()
+            _, files = future.result()
             all_relevant_files.extend(files)
 
     # Strip DOCS_SUBFOLDER prefix if AI included it (common issue)
@@ -282,11 +337,6 @@ def find_relevant_files_optimized(diff):
         if updated:
             print(f"Updated indexes for: {updated}")
             indexes_changed = True
-
-    # Commit indexes to repo so they persist across runs
-    if indexes_changed:
-        print("Committing indexes to repository...")
-        commit_indexes_to_repo()
 
     # Stage 1: Find relevant AREAS using indexes (1 API call)
     print("Finding relevant documentation areas from indexes...")
@@ -357,8 +407,8 @@ def find_relevant_files_optimized(diff):
                     return (file_path, summary)
                 except Exception as e:
                     print(f"Error summarizing {file_path}: {sanitize_output(str(e))}")
-                    # Fallback to truncated content
-                    return (file_path, content[:5000] + "\n... [truncated]")
+                    # Fallback to full content — downstream prompt handles truncation
+                    return (file_path, content)
 
             with ThreadPoolExecutor(max_workers=5) as executor:
                 futures = {executor.submit(generate_summary_task, args): args[0]
@@ -371,10 +421,17 @@ def find_relevant_files_optimized(diff):
     # Add files that didn't need summaries
     file_previews.extend(files_with_content)
 
-    # Commit summaries to repo so they persist across runs
-    if summaries_generated:
-        print("Committing file summaries to repository...")
-        commit_indexes_to_repo(content_type="summaries")
+    # Commit indexes and summaries in a single push to avoid the branch
+    # going stale between two separate pushes
+    if indexes_changed or summaries_generated:
+        content_parts = []
+        if indexes_changed:
+            content_parts.append("indexes")
+        if summaries_generated:
+            content_parts.append("summaries")
+        content_label = " and ".join(content_parts)
+        print(f"Committing {content_label} to repository...")
+        commit_indexes_to_repo(content_type=content_label)
 
     if not file_previews:
         return []

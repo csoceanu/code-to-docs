@@ -240,6 +240,8 @@ class TestFolderNeedsReindex:
     def test_unchanged_folder_no_reindex(self, doc_tree):
         hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
         manifest = {"folders": {"guides": {"doc_hashes": hashes}}}
+        # Index file must exist for the folder to be considered up-to-date
+        save_index("guides", "dummy index content", docs_root=doc_tree)
         assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is False
 
     def test_changed_file_triggers_reindex(self, doc_tree):
