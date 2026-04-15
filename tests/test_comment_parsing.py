@@ -7,7 +7,7 @@ import subprocess
 import pytest
 from unittest.mock import patch, MagicMock
 
-# Import the functions under test — these live in scripts/ (added to path by conftest)
+# Import the functions under test — these live in src/ (added to path by conftest)
 from comments import (
     parse_update_instructions,
     _resolve_file_instructions,

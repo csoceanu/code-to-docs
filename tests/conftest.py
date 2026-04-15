@@ -4,8 +4,8 @@ import os
 import sys
 import pytest
 
-# Add scripts/ to the path so we can import modules directly
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+# Add src/ to the path so we can import modules directly
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 # Config is now lazy (no env vars read at import time).
 # Tests that need a configured client should set these env vars explicitly.

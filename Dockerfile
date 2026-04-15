@@ -22,17 +22,17 @@ RUN pip install --no-cache-dir -U openai mcp mcp-atlassian
 # Set up working directory
 WORKDIR /app
 
-# Copy the scripts
-COPY scripts/config.py /app/config.py
-COPY scripts/github_ops.py /app/github_ops.py
-COPY scripts/discovery.py /app/discovery.py
-COPY scripts/generation.py /app/generation.py
-COPY scripts/comments.py /app/comments.py
-COPY scripts/suggest_docs.py /app/suggest_docs.py
-COPY scripts/security_utils.py /app/security_utils.py
-COPY scripts/doc_index.py /app/doc_index.py
-COPY scripts/jira_integration.py /app/jira_integration.py
-COPY scripts/utils.py /app/utils.py
+# Copy the source files
+COPY src/config.py /app/config.py
+COPY src/github_ops.py /app/github_ops.py
+COPY src/discovery.py /app/discovery.py
+COPY src/generation.py /app/generation.py
+COPY src/comments.py /app/comments.py
+COPY src/suggest_docs.py /app/suggest_docs.py
+COPY src/security_utils.py /app/security_utils.py
+COPY src/doc_index.py /app/doc_index.py
+COPY src/jira_integration.py /app/jira_integration.py
+COPY src/utils.py /app/utils.py
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
