@@ -162,6 +162,8 @@ Spec docs can be linked from the Jira ticket description or comments. Supported 
 
 Links that cannot be fetched automatically will be flagged in the review for manual review.
 
+> **Note:** The `[review-feature]` comment includes content from the Jira ticket and linked spec documents (requirements, descriptions, analysis). This information will be visible to anyone with access to the PR. Ensure that your repository's visibility settings are appropriate for the sensitivity of your Jira and spec doc content.
+
 ## Performance Optimization
 
 The action uses a two-stage caching system stored in `.doc-index/`:
