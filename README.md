@@ -110,6 +110,7 @@ jobs:
           jira-username: ${{ secrets.JIRA_USERNAME }}
           jira-api-token: ${{ secrets.JIRA_API_TOKEN }}
           google-sa-key: ${{ secrets.GOOGLE_SA_KEY }}
+          max-context-chars: ${{ secrets.MAX_CONTEXT_CHARS }}
 ```
 
 ### 2. Configure Secrets
