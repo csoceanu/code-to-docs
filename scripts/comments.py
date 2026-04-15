@@ -194,10 +194,10 @@ def _resolve_file_instructions(file_path, file_instructions):
     Find per-file instructions for a given file path.
 
     Matches by exact path, basename, or path suffix to allow users to write
-    just 'pools.rst' instead of 'rados/operations/pools.rst'.
+    just 'config.rst' instead of 'docs/admin/config.rst'.
 
     Args:
-        file_path: Full relative path (e.g. 'rados/operations/pools.rst')
+        file_path: Full relative path (e.g. 'docs/admin/config.rst')
         file_instructions: Dict mapping filename patterns to instructions
 
     Returns:
@@ -212,10 +212,10 @@ def _resolve_file_instructions(file_path, file_instructions):
         # Exact match
         if pattern == file_path:
             return instruction
-        # Basename match (e.g. 'pools.rst' matches 'rados/operations/pools.rst')
+        # Basename match (e.g. 'config.rst' matches 'docs/admin/config.rst')
         if pattern == basename:
             return instruction
-        # Suffix match (e.g. 'operations/pools.rst' matches 'rados/operations/pools.rst')
+        # Suffix match (e.g. 'admin/config.rst' matches 'docs/admin/config.rst')
         if file_path.endswith('/' + pattern):
             return instruction
 
