@@ -19,23 +19,13 @@ RUN pip install --no-cache-dir -U uv
 # Install AsciiDoc validator (asciidoctor.js)
 RUN npm install -g @asciidoctor/core @asciidoctor/cli
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -U openai mcp mcp-atlassian markdown docutils
-
 # Set up working directory
 WORKDIR /app
 
-# Copy the source files
-COPY src/config.py /app/config.py
-COPY src/github_ops.py /app/github_ops.py
-COPY src/discovery.py /app/discovery.py
-COPY src/generation.py /app/generation.py
-COPY src/comments.py /app/comments.py
-COPY src/suggest_docs.py /app/suggest_docs.py
-COPY src/security_utils.py /app/security_utils.py
-COPY src/doc_index.py /app/doc_index.py
-COPY src/jira_integration.py /app/jira_integration.py
-COPY src/utils.py /app/utils.py
+# Copy project metadata and install Python dependencies from pyproject.toml
+COPY pyproject.toml /app/pyproject.toml
+COPY src/ /app/src/
+RUN pip install --no-cache-dir /app
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh

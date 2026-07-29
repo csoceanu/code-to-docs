@@ -1,9 +1,9 @@
 [project]
 name = "code-to-docs"
-version = "1.0.0"
+version = "0.0.0"
 description = "GitHub Action that generates documentation suggestions from code changes using LLMs"
 requires-python = ">=3.12"
-license = {text = "Apache-2.0"}
+license = {text = "MIT"}
 dependencies = [
     "openai",
     "mcp",
@@ -34,6 +34,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E501", "E402"]
+# E501 suppressed for src: 52 existing violations in prompt strings; ruff format still enforces line length for code
 "src/**" = ["E501", "E402"]
 
 [tool.coverage.run]
