@@ -11,29 +11,36 @@ The index system works in two phases:
    indexes for folders where docs have changed
 """
 
+import hashlib
+import json
 import os
 import re
-import json
-import hashlib
-import subprocess
 import shutil
+import subprocess
 import tempfile
 import threading
-from contextlib import contextmanager
-from pathlib import Path
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path
 
 # Thread lock for manifest file operations (prevents race conditions in parallel summary generation)
 _manifest_lock = threading.Lock()
 
 # Import configuration
-from config import get_client, get_model_name, get_max_context_chars, truncate_content, truncate_diff, check_context_error
+from config import (
+    check_context_error,
+    get_client,
+    get_max_context_chars,
+    get_model_name,
+    truncate_content,
+    truncate_diff,
+)
 
 # Import security utilities for safe output
-from security_utils import sanitize_output, run_command_safe
-from utils import retry_with_backoff, calc_backoff_delay
+from security_utils import run_command_safe, sanitize_output
+from utils import calc_backoff_delay, retry_with_backoff
 
 # Index configuration
 INDEX_DIR = ".doc-index"
@@ -43,7 +50,7 @@ SUMMARIES_MANIFEST = "summaries_manifest.json"
 INDEX_VERSION = "1.0"
 INDEX_BRANCH = "code-to-docs/update-indexes"
 MAX_WORKERS_INDEX = 5  # Parallel threads for index generation
-MAX_WORKERS_API = 10   # Parallel threads for API calls
+MAX_WORKERS_API = 10  # Parallel threads for API calls
 
 
 @contextmanager
@@ -59,29 +66,29 @@ def working_directory(path):
 
 def hash_file(file_path):
     """Generate SHA256 hash of file contents"""
-    with open(file_path, 'rb') as f:
+    with open(file_path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
 
 
 def get_docs_root():
     """
     Get the root directory for documentation.
-    
+
     In same-repo scenarios, DOCS_SUBFOLDER env var specifies the docs location.
     If already in the docs directory (after setup_docs_environment), use current dir.
-    
+
     Returns:
         Path: The documentation root directory
     """
     # Check if DOCS_SUBFOLDER is set and we haven't already changed to it
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
-    
+
     if docs_subfolder:
         subfolder_path = Path(docs_subfolder)
         # If the subfolder exists from current directory, use it
         if subfolder_path.exists() and subfolder_path.is_dir():
             return subfolder_path
-    
+
     # Default: use current directory (assumes setup_docs_environment already ran)
     return Path(".")
 
@@ -119,7 +126,7 @@ def get_doc_folders(docs_root=None):
             except ValueError:
                 continue
 
-            if any(part.startswith('.') or part.startswith('_') for part in rel_path.parent.parts):
+            if any(part.startswith(".") or part.startswith("_") for part in rel_path.parent.parts):
                 continue
 
             if len(rel_path.parts) > 1:
@@ -161,53 +168,49 @@ def get_docs_in_folder(folder, docs_root=None):
 def load_manifest(docs_root=None):
     """
     Load the index manifest file.
-    
+
     Args:
         docs_root: Optional root path for docs. If None, uses get_docs_root()
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     manifest_path = Path(docs_root) / INDEX_DIR / MANIFEST_FILE
     if manifest_path.exists():
         with open(manifest_path) as f:
             return json.load(f)
-    return {
-        "version": INDEX_VERSION,
-        "created": datetime.now().isoformat(),
-        "folders": {}
-    }
+    return {"version": INDEX_VERSION, "created": datetime.now().isoformat(), "folders": {}}
 
 
 def save_manifest(manifest, docs_root=None):
     """
     Save the index manifest file.
-    
+
     Args:
         manifest: The manifest dict to save
         docs_root: Optional root path for docs. If None, uses get_docs_root()
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     index_dir = Path(docs_root) / INDEX_DIR
     index_dir.mkdir(exist_ok=True)
     manifest["updated"] = datetime.now().isoformat()
-    with open(index_dir / MANIFEST_FILE, 'w') as f:
+    with open(index_dir / MANIFEST_FILE, "w") as f:
         json.dump(manifest, f, indent=2)
 
 
 def get_folder_doc_hashes(folder, docs_root=None):
     """
     Get hashes of all docs in a folder.
-    
+
     Args:
         folder: Folder name relative to docs root
         docs_root: Optional root path for docs. If None, uses get_docs_root()
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     hashes = {}
     for doc in get_docs_in_folder(folder, docs_root):
         # Store relative path as key for consistency
@@ -296,7 +299,7 @@ def _batch_docs_by_budget(docs_content, budget, prompt_overhead):
     for doc in docs_content:
         # Size of this file when formatted: "### File: path\n\ncontent" + separator
         formatting_overhead = len(f"### File: {doc['path']}\n\n") + 10
-        entry_size = formatting_overhead + len(doc['content'])
+        entry_size = formatting_overhead + len(doc["content"])
 
         # If a single file exceeds the budget, truncate it to fit in its own batch
         if entry_size > available:
@@ -352,11 +355,8 @@ def build_index_for_folder(folder, client=None):
     docs_content = []
     for doc in docs:
         try:
-            content = doc.read_text(encoding='utf-8')
-            docs_content.append({
-                "path": str(doc),
-                "content": content
-            })
+            content = doc.read_text(encoding="utf-8")
+            docs_content.append({"path": str(doc), "content": content})
         except Exception as e:
             print(f"Warning: Could not read {doc}: {sanitize_output(str(e))}")
 
@@ -367,15 +367,13 @@ def build_index_for_folder(folder, client=None):
     prompt_overhead = len(_build_index_prompt(folder, ""))
 
     total_content_size = sum(
-        len(f"### File: {d['path']}\n\n{d['content']}") + 10
-        for d in docs_content
+        len(f"### File: {d['path']}\n\n{d['content']}") + 10 for d in docs_content
     )
 
     if total_content_size + prompt_overhead <= budget:
-        docs_text = "\n\n---\n\n".join([
-            f"### File: {d['path']}\n\n{d['content']}"
-            for d in docs_content
-        ])
+        docs_text = "\n\n---\n\n".join(
+            [f"### File: {d['path']}\n\n{d['content']}" for d in docs_content]
+        )
         prompt = _build_index_prompt(folder, docs_text)
 
         try:
@@ -391,16 +389,15 @@ def build_index_for_folder(folder, client=None):
 
     # Files don't fit in one call — batch them
     batches = _batch_docs_by_budget(docs_content, budget, prompt_overhead)
-    print(f"  Folder '{folder}' has {len(docs_content)} files ({total_content_size:,} chars) — processing in {len(batches)} batches")
+    print(
+        f"  Folder '{folder}' has {len(docs_content)} files ({total_content_size:,} chars) — processing in {len(batches)} batches"
+    )
 
     partial_indexes = []
     model_name = get_model_name()
 
     for i, batch in enumerate(batches, 1):
-        docs_text = "\n\n---\n\n".join([
-            f"### File: {d['path']}\n\n{d['content']}"
-            for d in batch
-        ])
+        docs_text = "\n\n---\n\n".join([f"### File: {d['path']}\n\n{d['content']}" for d in batch])
         print(f"  Batch {i}/{len(batches)}: {len(batch)} files")
 
         prompt = _build_index_prompt(folder, docs_text)
@@ -473,10 +470,15 @@ OUTPUT FORMAT — produce exactly ONE index with these sections:
 
 def build_index_for_folder_with_retry(folder, client=None, max_retries=3):
     """Build index with retry logic for transient errors"""
-    def _log_retry(attempt, total, exc, wait_time):
-        print(f"Error building index for {folder} (attempt {attempt + 1}/{total}): {sanitize_output(str(exc))}, waiting {wait_time}s...")
 
-    @retry_with_backoff(max_retries=max_retries, delay_multiplier=3, on_retry=_log_retry, default=None)
+    def _log_retry(attempt, total, exc, wait_time):
+        print(
+            f"Error building index for {folder} (attempt {attempt + 1}/{total}): {sanitize_output(str(exc))}, waiting {wait_time}s..."
+        )
+
+    @retry_with_backoff(
+        max_retries=max_retries, delay_multiplier=3, on_retry=_log_retry, default=None
+    )
     def _try_build():
         return build_index_for_folder(folder, client)
 
@@ -486,7 +488,7 @@ def build_index_for_folder_with_retry(folder, client=None, max_retries=3):
 def save_index(folder, index_content, docs_root=None):
     """
     Save index content to file.
-    
+
     Args:
         folder: Folder name
         index_content: The index content to save
@@ -494,95 +496,95 @@ def save_index(folder, index_content, docs_root=None):
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     index_dir = Path(docs_root) / INDEX_DIR
     index_dir.mkdir(exist_ok=True)
     index_file = index_dir / f"{folder.replace('/', '-')}.index.md"
-    index_file.write_text(index_content, encoding='utf-8')
+    index_file.write_text(index_content, encoding="utf-8")
     return index_file
 
 
 def load_index(folder, docs_root=None):
     """
     Load index content for a folder.
-    
+
     Args:
         folder: Folder name
         docs_root: Optional root path for docs. If None, uses get_docs_root()
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     index_file = Path(docs_root) / INDEX_DIR / f"{folder.replace('/', '-')}.index.md"
     if index_file.exists():
-        return index_file.read_text(encoding='utf-8')
+        return index_file.read_text(encoding="utf-8")
     return None
 
 
 def load_all_indexes(docs_root=None):
     """
     Load all index files.
-    
+
     Args:
         docs_root: Optional root path for docs. If None, uses get_docs_root()
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     indexes = {}
     index_dir = Path(docs_root) / INDEX_DIR
     if not index_dir.exists():
         return indexes
-    
+
     doc_folders = set(get_doc_folders(docs_root))
     # Build a reverse lookup: filename stem → actual folder path
     stem_to_folder = {f.replace("/", "-"): f for f in doc_folders}
     for index_file in index_dir.glob("*.index.md"):
         stem = index_file.stem.replace(".index", "")
         folder_name = stem_to_folder.get(stem, stem)
-        indexes[folder_name] = index_file.read_text(encoding='utf-8')
-    
+        indexes[folder_name] = index_file.read_text(encoding="utf-8")
+
     return indexes
 
 
 def build_all_indexes(force=False):
     """
     Build indexes for all documentation folders.
-    
+
     Args:
         force: If True, rebuild all indexes regardless of whether docs changed
-    
+
     Returns:
         dict: Results for each folder
     """
     print("Building documentation indexes...")
-    
+
     manifest = load_manifest()
     doc_folders = get_doc_folders()
     client = get_client()
-    
+
     folders_to_build = []
     for folder in doc_folders:
         if force or folder_needs_reindex(folder, manifest):
             folders_to_build.append(folder)
         else:
             print(f"Skipping {folder} (no changes)")
-    
+
     if not folders_to_build:
         print("All indexes are up to date")
         return {"status": "up_to_date", "folders": doc_folders}
-    
+
     print(f"Building indexes for {len(folders_to_build)} folders: {folders_to_build}")
-    
+
     results = {}
-    
+
     # Build indexes in parallel
     with ThreadPoolExecutor(max_workers=MAX_WORKERS_INDEX) as executor:
         futures = {
             executor.submit(build_index_for_folder_with_retry, folder, client): folder
             for folder in folders_to_build
         }
-        
+
         for future in as_completed(futures):
             folder = futures[future]
             try:
@@ -591,7 +593,7 @@ def build_all_indexes(force=False):
                     save_index(folder, index_content)
                     manifest["folders"][folder] = {
                         "built": datetime.now().isoformat(),
-                        "doc_hashes": get_folder_doc_hashes(folder)
+                        "doc_hashes": get_folder_doc_hashes(folder),
                     }
                     results[folder] = "success"
                     print(f"✅ Built index for {folder}")
@@ -601,29 +603,25 @@ def build_all_indexes(force=False):
             except Exception as e:
                 results[folder] = f"error: {e}"
                 print(f"❌ Failed to build index for {folder}: {sanitize_output(str(e))}")
-    
+
     save_manifest(manifest)
-    
-    return {
-        "status": "built",
-        "folders_built": list(results.keys()),
-        "results": results
-    }
+
+    return {"status": "built", "folders_built": list(results.keys()), "results": results}
 
 
 def update_indexes_if_needed():
     """
     Check for doc changes and update indexes as needed.
-    
+
     Returns:
         list: Folders that were updated
     """
     manifest = load_manifest()
     doc_folders = get_doc_folders()
     client = get_client()
-    
+
     updated_folders = []
-    
+
     for folder in doc_folders:
         if folder_needs_reindex(folder, manifest):
             print(f"Docs changed in {folder}, regenerating index...")
@@ -632,16 +630,15 @@ def update_indexes_if_needed():
                 save_index(folder, index_content)
                 manifest["folders"][folder] = {
                     "built": datetime.now().isoformat(),
-                    "doc_hashes": get_folder_doc_hashes(folder)
+                    "doc_hashes": get_folder_doc_hashes(folder),
                 }
                 updated_folders.append(folder)
                 print(f"✅ Updated index for {folder}")
-    
+
     if updated_folders:
         save_manifest(manifest)
-    
-    return updated_folders
 
+    return updated_folders
 
 
 def commit_indexes_to_repo(content_type="indexes"):
@@ -677,8 +674,7 @@ def commit_indexes_to_repo(content_type="indexes"):
     try:
         with working_directory(target_dir):
             status_result = run_command_safe(
-                ["git", "status", "--porcelain", index_relative_path],
-                check=False
+                ["git", "status", "--porcelain", index_relative_path], check=False
             )
 
             if not status_result.stdout.strip():
@@ -692,8 +688,7 @@ def commit_indexes_to_repo(content_type="indexes"):
                 return False
 
             current_branch_result = run_command_safe(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                check=True
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"], check=True
             )
             current_branch = current_branch_result.stdout.strip()
 
@@ -708,8 +703,7 @@ def commit_indexes_to_repo(content_type="indexes"):
             try:
                 run_command_safe(["git", "fetch", "origin", base_branch], check=False)
                 run_command_safe(
-                    ["git", "checkout", "-B", INDEX_BRANCH, f"origin/{base_branch}"],
-                    check=True
+                    ["git", "checkout", "-B", INDEX_BRANCH, f"origin/{base_branch}"], check=True
                 )
 
                 if temp_index_path.exists():
@@ -720,8 +714,7 @@ def commit_indexes_to_repo(content_type="indexes"):
                 run_command_safe(["git", "add", index_relative_path], check=True)
 
                 staged_result = run_command_safe(
-                    ["git", "diff", "--cached", "--name-only"],
-                    check=False
+                    ["git", "diff", "--cached", "--name-only"], check=False
                 )
                 if not staged_result.stdout.strip():
                     print(f"No {content_type} changes to commit (already up to date)")
@@ -737,7 +730,17 @@ def commit_indexes_to_repo(content_type="indexes"):
                 )
 
                 check_pr = run_command_safe(
-                    ["gh", "pr", "list", "--head", INDEX_BRANCH, "--state", "open", "--json", "number"],
+                    [
+                        "gh",
+                        "pr",
+                        "list",
+                        "--head",
+                        INDEX_BRANCH,
+                        "--state",
+                        "open",
+                        "--json",
+                        "number",
+                    ],
                     check=False,
                     env={**os.environ, "GH_TOKEN": gh_token},
                 )
@@ -754,11 +757,17 @@ def commit_indexes_to_repo(content_type="indexes"):
                     )
                     run_command_safe(
                         [
-                            "gh", "pr", "create",
-                            "--title", f"chore: Update documentation semantic {content_type}",
-                            "--body", pr_body,
-                            "--base", base_branch,
-                            "--head", INDEX_BRANCH,
+                            "gh",
+                            "pr",
+                            "create",
+                            "--title",
+                            f"chore: Update documentation semantic {content_type}",
+                            "--body",
+                            pr_body,
+                            "--base",
+                            base_branch,
+                            "--head",
+                            INDEX_BRANCH,
                         ],
                         check=True,
                         env={**os.environ, "GH_TOKEN": gh_token},
@@ -771,8 +780,10 @@ def commit_indexes_to_repo(content_type="indexes"):
                 run_command_safe(["git", "checkout", current_branch], check=False)
                 stash_result = run_command_safe(["git", "stash", "pop"], check=False)
                 if stash_result.returncode != 0 and stash_result.stderr:
-                    print(f"Warning: git stash pop failed — stashed changes may need manual recovery. "
-                          f"Run 'git stash list' to find them.")
+                    print(
+                        "Warning: git stash pop failed — stashed changes may need manual recovery. "
+                        "Run 'git stash list' to find them."
+                    )
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
     except subprocess.CalledProcessError as e:
@@ -815,14 +826,13 @@ def find_relevant_files_from_indexes(diff, client=None):
     print(f"Scanning {len(all_folders)} doc areas in {total_batches} batches...")
 
     for batch_idx in range(0, len(all_folders), BATCH_SIZE):
-        batch_folders = all_folders[batch_idx:batch_idx + BATCH_SIZE]
+        batch_folders = all_folders[batch_idx : batch_idx + BATCH_SIZE]
         batch_num = (batch_idx // BATCH_SIZE) + 1
 
-        separator = "\n\n" + "="*50 + "\n\n"
-        batch_indexes = separator.join([
-            f"## Documentation Area: {folder}\n\n{indexes[folder]}"
-            for folder in batch_folders
-        ])
+        separator = "\n\n" + "=" * 50 + "\n\n"
+        batch_indexes = separator.join(
+            [f"## Documentation Area: {folder}\n\n{indexes[folder]}" for folder in batch_folders]
+        )
 
         prompt_template = f"""
 You are analyzing a code diff to determine which specific documentation FILES need updates.
@@ -865,7 +875,9 @@ IMPORTANT: You MUST respond with a valid JSON array. No other text or explanatio
 You MUST output something. An empty response is not valid - output [] instead.
 """
         diff_budget = get_max_context_chars() - len(prompt_template)
-        truncated_diff = truncate_diff(diff, diff_budget, label=f"file-selection diff (batch {batch_num})")
+        truncated_diff = truncate_diff(
+            diff, diff_budget, label=f"file-selection diff (batch {batch_num})"
+        )
         prompt = prompt_template.replace("{DIFF_PLACEHOLDER}", truncated_diff)
 
         batch_files = _process_file_selection_batch(client, prompt, batch_num, total_batches)
@@ -879,10 +891,10 @@ You MUST output something. An empty response is not valid - output [] instead.
     docs_root = get_docs_root()
     valid_files = []
     for f in all_relevant_files:
-        if any(c in f for c in ['*', '?', '[']):
+        if any(c in f for c in ["*", "?", "["]):
             print(f"Skipping invalid path (glob pattern): {f}")
             continue
-        if not (f.endswith('.md') or f.endswith('.rst') or f.endswith('.adoc')):
+        if not (f.endswith(".md") or f.endswith(".rst") or f.endswith(".adoc")):
             print(f"Skipping non-doc file: {f}")
             continue
         if not (Path(docs_root) / f).is_file() and not Path(f).is_file():
@@ -924,7 +936,9 @@ def _process_file_selection_batch(client, prompt, batch_num, total_batches):
             try:
                 response_text = response.choices[0].message.content
             except Exception:
-                print(f"Batch {batch_num}/{total_batches}: Could not get response text (attempt {attempt + 1})")
+                print(
+                    f"Batch {batch_num}/{total_batches}: Could not get response text (attempt {attempt + 1})"
+                )
                 if attempt < max_retries - 1:
                     time.sleep(calc_backoff_delay(attempt, multiplier=2))
                     continue
@@ -933,11 +947,15 @@ def _process_file_selection_batch(client, prompt, batch_num, total_batches):
 
             if not response_text or not response_text.strip():
                 if attempt < max_retries - 1:
-                    print(f"Batch {batch_num}/{total_batches}: Empty response (attempt {attempt + 1}), retrying...")
+                    print(
+                        f"Batch {batch_num}/{total_batches}: Empty response (attempt {attempt + 1}), retrying..."
+                    )
                     time.sleep(calc_backoff_delay(attempt, multiplier=2))
                     continue
                 else:
-                    print(f"Batch {batch_num}/{total_batches}: Empty response after retries, treating as no relevant files")
+                    print(
+                        f"Batch {batch_num}/{total_batches}: Empty response after retries, treating as no relevant files"
+                    )
                     return []
 
             result_text = response_text.strip()
@@ -948,7 +966,7 @@ def _process_file_selection_batch(client, prompt, batch_num, total_batches):
                 result_text = result_text.rsplit("\n", 1)[0]
             result_text = result_text.strip()
 
-            json_match = re.search(r'\[.*?\]', result_text, re.DOTALL)
+            json_match = re.search(r"\[.*?\]", result_text, re.DOTALL)
             if json_match:
                 result_text = json_match.group(0)
 
@@ -960,10 +978,12 @@ def _process_file_selection_batch(client, prompt, batch_num, total_batches):
                 print(f"Batch {batch_num}/{total_batches}: No relevant files")
 
             return relevant_files
-            
+
         except json.JSONDecodeError:
             if attempt < max_retries - 1:
-                print(f"Batch {batch_num}/{total_batches}: JSON parse error (attempt {attempt + 1}), retrying...")
+                print(
+                    f"Batch {batch_num}/{total_batches}: JSON parse error (attempt {attempt + 1}), retrying..."
+                )
                 time.sleep(calc_backoff_delay(attempt, multiplier=2))
                 continue
             print(f"Batch {batch_num}/{total_batches}: JSON parse failed, skipping batch")
@@ -974,23 +994,26 @@ def _process_file_selection_batch(client, prompt, batch_num, total_batches):
                 return []
             if attempt < max_retries - 1:
                 wait_time = calc_backoff_delay(attempt, multiplier=3)
-                print(f"Batch {batch_num}/{total_batches}: Error (attempt {attempt + 1}), waiting {wait_time}s...")
+                print(
+                    f"Batch {batch_num}/{total_batches}: Error (attempt {attempt + 1}), waiting {wait_time}s..."
+                )
                 time.sleep(wait_time)
                 continue
-            print(f"Batch {batch_num}/{total_batches}: Failed after retries - {sanitize_output(str(e))}")
+            print(
+                f"Batch {batch_num}/{total_batches}: Failed after retries - {sanitize_output(str(e))}"
+            )
             return []
 
     return []
 
 
-
 def fetch_indexes_from_main():
     """
     Fetch indexes and summaries from the main/base branch.
-    
+
     This ensures PRs can benefit from cached indexes and summaries on main,
     even if they were generated by previous PR runs.
-    
+
     Returns:
         bool: True if indexes/summaries were fetched, False otherwise
     """
@@ -1016,8 +1039,7 @@ def fetch_indexes_from_main():
 
             # Check if index directory exists on the base branch
             check_result = run_command_safe(
-                ["git", "ls-tree", "-r", f"origin/{base_branch}", "--name-only"],
-                check=False
+                ["git", "ls-tree", "-r", f"origin/{base_branch}", "--name-only"], check=False
             )
 
             if check_result.returncode != 0 or index_relative_path not in check_result.stdout:
@@ -1027,8 +1049,7 @@ def fetch_indexes_from_main():
             # Checkout the index directory from main (includes summaries)
             print(f"Fetching indexes and summaries from {base_branch}...")
             checkout_result = run_command_safe(
-                ["git", "checkout", f"origin/{base_branch}", "--", index_relative_path],
-                check=False
+                ["git", "checkout", f"origin/{base_branch}", "--", index_relative_path], check=False
             )
 
             if checkout_result.returncode == 0:
@@ -1046,20 +1067,20 @@ def fetch_indexes_from_main():
 def indexes_exist(docs_root=None):
     """
     Check if indexes have been built.
-    
+
     Args:
         docs_root: Optional root path for docs. If None, uses get_docs_root()
-    
+
     Returns:
         bool: True if index files exist
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     index_dir = Path(docs_root) / INDEX_DIR
     if not index_dir.exists():
         return False
-    
+
     index_files = list(index_dir.glob("*.index.md"))
     return len(index_files) > 0
 
@@ -1082,7 +1103,7 @@ def load_summaries_manifest(docs_root=None):
     """Load the summaries manifest file."""
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     manifest_path = Path(docs_root) / INDEX_DIR / SUMMARIES_MANIFEST
     if manifest_path.exists():
         try:
@@ -1099,11 +1120,11 @@ def save_summaries_manifest(manifest, docs_root=None):
     """Save the summaries manifest file."""
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     index_dir = Path(docs_root) / INDEX_DIR
     index_dir.mkdir(exist_ok=True)
     manifest["updated"] = datetime.now().isoformat()
-    with open(index_dir / SUMMARIES_MANIFEST, 'w') as f:
+    with open(index_dir / SUMMARIES_MANIFEST, "w") as f:
         json.dump(manifest, f, indent=2)
 
 
@@ -1117,52 +1138,52 @@ def get_summary_filename(file_path):
 def load_cached_summary(file_path, docs_root=None):
     """
     Load a cached summary for a file if it exists and is still valid.
-    
+
     Args:
         file_path: Path to the original documentation file
         docs_root: Optional docs root path
-    
+
     Returns:
         str: The cached summary, or None if not found or outdated
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     manifest = load_summaries_manifest(docs_root)
     file_key = str(file_path)
-    
+
     # Debug: show manifest state on first call
     manifest_files = manifest.get("files", {})
-    if len(manifest_files) > 0 and not hasattr(load_cached_summary, '_debug_shown'):
+    if len(manifest_files) > 0 and not hasattr(load_cached_summary, "_debug_shown"):
         print(f"Summaries manifest has {len(manifest_files)} entries")
         load_cached_summary._debug_shown = True
-    
+
     # Check if we have a cached summary
     if file_key not in manifest_files:
         return None
-    
+
     # Check if the file has changed since the summary was generated
     try:
         current_hash = hash_file(Path(docs_root) / file_path)
     except Exception:
         current_hash = hash_file(file_path)
-    
+
     stored_hash = manifest_files[file_key].get("hash")
     if current_hash != stored_hash:
         return None  # File changed, need to regenerate
-    
+
     # Load the summary file
     summary_file = get_summaries_dir(docs_root) / get_summary_filename(file_path)
     if summary_file.exists():
-        return summary_file.read_text(encoding='utf-8')
-    
+        return summary_file.read_text(encoding="utf-8")
+
     return None
 
 
 def save_summary(file_path, summary, docs_root=None):
     """
     Save a generated summary to cache.
-    
+
     Args:
         file_path: Path to the original documentation file
         summary: The generated summary text
@@ -1170,44 +1191,44 @@ def save_summary(file_path, summary, docs_root=None):
     """
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     # Ensure summaries directory exists
     summaries_dir = get_summaries_dir(docs_root)
     summaries_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Save the summary file
     summary_file = summaries_dir / get_summary_filename(file_path)
-    summary_file.write_text(summary, encoding='utf-8')
-    
+    summary_file.write_text(summary, encoding="utf-8")
+
     # Update the manifest (thread-safe to prevent race conditions in parallel generation)
     with _manifest_lock:
         manifest = load_summaries_manifest(docs_root)
-        
+
         # Calculate file hash
         try:
             file_hash = hash_file(Path(docs_root) / file_path)
         except Exception:
             file_hash = hash_file(file_path)
-        
+
         manifest["files"][str(file_path)] = {
             "hash": file_hash,
             "generated": datetime.now().isoformat(),
-            "summary_file": str(summary_file.name)
+            "summary_file": str(summary_file.name),
         }
-        
+
         save_summaries_manifest(manifest, docs_root)
 
 
 def get_or_generate_summary(file_path, content, generate_func, docs_root=None):
     """
     Get a cached summary or generate a new one.
-    
+
     Args:
         file_path: Path to the documentation file
         content: The file content (used if we need to generate)
         generate_func: Function to call to generate summary (takes file_path, content)
         docs_root: Optional docs root path
-    
+
     Returns:
         str: The summary (cached or newly generated)
     """
@@ -1215,14 +1236,14 @@ def get_or_generate_summary(file_path, content, generate_func, docs_root=None):
     cached = load_cached_summary(file_path, docs_root)
     if cached:
         return cached
-    
+
     # Generate new summary
     summary = generate_func(file_path, content)
-    
+
     # Cache it for next time
     if summary:
         save_summary(file_path, summary, docs_root)
-    
+
     return summary
 
 
@@ -1230,11 +1251,11 @@ def summaries_exist(docs_root=None):
     """Check if any cached summaries exist."""
     if docs_root is None:
         docs_root = get_docs_root()
-    
+
     summaries_dir = get_summaries_dir(docs_root)
     if not summaries_dir.exists():
         return False
-    
+
     summary_files = list(summaries_dir.glob("*.summary.md"))
     return len(summary_files) > 0
 
@@ -1242,34 +1263,33 @@ def summaries_exist(docs_root=None):
 # CLI interface for testing
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Documentation Index Management")
     parser.add_argument("--build", action="store_true", help="Build all indexes")
     parser.add_argument("--force", action="store_true", help="Force rebuild all indexes")
     parser.add_argument("--list", action="store_true", help="List all doc folders")
     parser.add_argument("--show", type=str, help="Show index for a specific folder")
-    
+
     args = parser.parse_args()
-    
+
     if args.list:
         folders = get_doc_folders()
         print(f"Documentation folders ({len(folders)}):")
         for f in folders:
             print(f"  - {f}")
-    
+
     elif args.build:
         result = build_all_indexes(force=args.force)
         print(f"\nResult: {result['status']}")
-        if result.get('folders_built'):
+        if result.get("folders_built"):
             print(f"Built indexes for: {result['folders_built']}")
-    
+
     elif args.show:
         index = load_index(args.show)
         if index:
             print(index)
         else:
             print(f"No index found for {args.show}")
-    
+
     else:
         parser.print_help()
-

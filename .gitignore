@@ -15,6 +15,13 @@ venv/
 .coverage
 htmlcov/
 
+# Linting
+.ruff_cache/
+
+# Environment
+.env
+.envrc
+
 # IDEs
 .idea/
 .vscode/

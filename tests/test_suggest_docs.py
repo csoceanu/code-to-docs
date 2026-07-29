@@ -1,13 +1,12 @@
 """Tests for suggest_docs.py — main orchestrator covering all three command modes."""
 
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Stub openai before any script imports config
 sys.modules.setdefault("openai", MagicMock())
 
 from suggest_docs import main
-
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +35,10 @@ class TestMainEmptyDiff:
 
 class TestMainReviewMode:
     @patch("suggest_docs.post_review_comment")
-    @patch("suggest_docs.generate_updates_parallel", return_value=[("guide.rst", "old", "new"), ("api.md", "old2", "new2")])
+    @patch(
+        "suggest_docs.generate_updates_parallel",
+        return_value=[("guide.rst", "old", "new"), ("api.md", "old2", "new2")],
+    )
     @patch("suggest_docs.find_relevant_files_optimized", return_value=["guide.rst", "api.md"])
     @patch("suggest_docs.setup_docs_environment", return_value=True)
     @patch("suggest_docs.get_commit_info", return_value=_mock_commit_info())
@@ -66,16 +68,32 @@ class TestMainUpdateMode:
     @patch("suggest_docs.run_command_safe")
     @patch("suggest_docs.push_and_open_pr")
     @patch("suggest_docs.overwrite_file", return_value=True)
-    @patch("suggest_docs.generate_updates_parallel", return_value=[("guide.rst", "old content", "new content"), ("api.md", "old2", "new2")])
+    @patch(
+        "suggest_docs.generate_updates_parallel",
+        return_value=[("guide.rst", "old content", "new content"), ("api.md", "old2", "new2")],
+    )
     @patch("suggest_docs.find_relevant_files_optimized", return_value=["guide.rst", "api.md"])
     @patch("suggest_docs.setup_docs_environment", return_value=True)
-    @patch("suggest_docs.parse_previous_review", return_value={"review_found": False, "accepted_files": [], "rejected_files": []})
+    @patch(
+        "suggest_docs.parse_previous_review",
+        return_value={"review_found": False, "accepted_files": [], "rejected_files": []},
+    )
     @patch("suggest_docs.parse_update_instructions", return_value=("", {}))
     @patch("suggest_docs.get_commit_info", return_value=_mock_commit_info())
     @patch("suggest_docs.get_diff", return_value="diff --git a/foo.py b/foo.py")
     def test_update_creates_pr(
-        self, mock_diff, mock_ci, mock_parse_instr, mock_parse_rev,
-        mock_setup, mock_find, mock_gen, mock_overwrite, mock_push, mock_cmd, monkeypatch
+        self,
+        mock_diff,
+        mock_ci,
+        mock_parse_instr,
+        mock_parse_rev,
+        mock_setup,
+        mock_find,
+        mock_gen,
+        mock_overwrite,
+        mock_push,
+        mock_cmd,
+        monkeypatch,
     ):
         monkeypatch.setenv("COMMENT_BODY", "[update-docs]")
         monkeypatch.setenv("PR_NUMBER", "42")
@@ -89,21 +107,37 @@ class TestMainUpdateMode:
     @patch("suggest_docs.run_command_safe")
     @patch("suggest_docs.push_and_open_pr")
     @patch("suggest_docs.overwrite_file", return_value=True)
-    @patch("suggest_docs.generate_updates_parallel", return_value=[("guide.rst", "old", "new"), ("ref.adoc", "old2", "new2")])
+    @patch(
+        "suggest_docs.generate_updates_parallel",
+        return_value=[("guide.rst", "old", "new"), ("ref.adoc", "old2", "new2")],
+    )
     @patch("suggest_docs.find_relevant_files_optimized")
     @patch("suggest_docs.setup_docs_environment", return_value=True)
-    @patch("suggest_docs.parse_previous_review", return_value={
-        "review_found": True,
-        "accepted_files": ["guide.rst", "ref.adoc"],
-        "rejected_files": ["api.md"],
-        "review_commit": "abc1234",
-    })
+    @patch(
+        "suggest_docs.parse_previous_review",
+        return_value={
+            "review_found": True,
+            "accepted_files": ["guide.rst", "ref.adoc"],
+            "rejected_files": ["api.md"],
+            "review_commit": "abc1234",
+        },
+    )
     @patch("suggest_docs.parse_update_instructions", return_value=("", {}))
     @patch("suggest_docs.get_commit_info", return_value=_mock_commit_info())
     @patch("suggest_docs.get_diff", return_value="diff --git a/foo.py b/foo.py")
     def test_previous_review_respected(
-        self, mock_diff, mock_ci, mock_parse_instr, mock_parse_rev,
-        mock_setup, mock_find, mock_gen, mock_overwrite, mock_push, mock_cmd, monkeypatch
+        self,
+        mock_diff,
+        mock_ci,
+        mock_parse_instr,
+        mock_parse_rev,
+        mock_setup,
+        mock_find,
+        mock_gen,
+        mock_overwrite,
+        mock_push,
+        mock_cmd,
+        monkeypatch,
     ):
         monkeypatch.setenv("COMMENT_BODY", "[update-docs]")
         monkeypatch.setenv("PR_NUMBER", "42")
@@ -158,20 +192,35 @@ class TestMainFeatureMode:
     @patch("suggest_docs.post_review_comment")
     @patch("suggest_docs.find_relevant_files_optimized", return_value=[])
     @patch("suggest_docs.setup_docs_environment", return_value=True)
-    @patch("suggest_docs.format_feature_review_section", return_value="## Feature Coverage\nAll covered")
+    @patch(
+        "suggest_docs.format_feature_review_section",
+        return_value="## Feature Coverage\nAll covered",
+    )
     @patch("suggest_docs.analyze_feature_coverage", return_value="coverage analysis")
-    @patch("suggest_docs.fetch_jira_context_sync", return_value={
-        "error": None,
-        "summary": "Implement widget",
-        "spec_docs": [],
-        "inaccessible_links": [],
-    })
+    @patch(
+        "suggest_docs.fetch_jira_context_sync",
+        return_value={
+            "error": None,
+            "summary": "Implement widget",
+            "spec_docs": [],
+            "inaccessible_links": [],
+        },
+    )
     @patch("suggest_docs.get_commit_info", return_value=_mock_commit_info())
     @patch("suggest_docs.get_diff", return_value="diff --git a/foo.py b/foo.py")
     @patch("suggest_docs.parse_feature_command", return_value=("PROJ-123", ""))
     def test_feature_happy_path(
-        self, mock_parse, mock_diff, mock_ci, mock_fetch, mock_analyze,
-        mock_format, mock_setup, mock_find, mock_post, monkeypatch
+        self,
+        mock_parse,
+        mock_diff,
+        mock_ci,
+        mock_fetch,
+        mock_analyze,
+        mock_format,
+        mock_setup,
+        mock_find,
+        mock_post,
+        monkeypatch,
     ):
         monkeypatch.setenv("COMMENT_BODY", "[review-feature] PROJ-123")
         monkeypatch.setenv("PR_NUMBER", "42")
@@ -181,8 +230,10 @@ class TestMainFeatureMode:
         monkeypatch.setattr("sys.argv", ["suggest_docs.py"])
 
         # Patch get_client and get_model_name for analyze_feature_coverage
-        with patch("suggest_docs.get_client") as mock_client, \
-             patch("suggest_docs.get_model_name", return_value="test-model"):
+        with (
+            patch("suggest_docs.get_client"),
+            patch("suggest_docs.get_model_name", return_value="test-model"),
+        ):
             main()
 
         mock_fetch.assert_called_once_with("PROJ-123")
@@ -201,16 +252,32 @@ class TestMainDryRun:
     @patch("suggest_docs.post_review_comment")
     @patch("suggest_docs.push_and_open_pr")
     @patch("suggest_docs.overwrite_file")
-    @patch("suggest_docs.generate_updates_parallel", return_value=[("guide.rst", "old", "new"), ("api.md", "old2", "new2")])
+    @patch(
+        "suggest_docs.generate_updates_parallel",
+        return_value=[("guide.rst", "old", "new"), ("api.md", "old2", "new2")],
+    )
     @patch("suggest_docs.find_relevant_files_optimized", return_value=["guide.rst", "api.md"])
     @patch("suggest_docs.setup_docs_environment", return_value=True)
-    @patch("suggest_docs.parse_previous_review", return_value={"review_found": False, "accepted_files": [], "rejected_files": []})
+    @patch(
+        "suggest_docs.parse_previous_review",
+        return_value={"review_found": False, "accepted_files": [], "rejected_files": []},
+    )
     @patch("suggest_docs.parse_update_instructions", return_value=("", {}))
     @patch("suggest_docs.get_commit_info", return_value=_mock_commit_info())
     @patch("suggest_docs.get_diff", return_value="diff --git a/foo.py b/foo.py")
     def test_dry_run_no_writes(
-        self, mock_diff, mock_ci, mock_parse_instr, mock_parse_rev,
-        mock_setup, mock_find, mock_gen, mock_overwrite, mock_push, mock_post, monkeypatch
+        self,
+        mock_diff,
+        mock_ci,
+        mock_parse_instr,
+        mock_parse_rev,
+        mock_setup,
+        mock_find,
+        mock_gen,
+        mock_overwrite,
+        mock_push,
+        mock_post,
+        monkeypatch,
     ):
         monkeypatch.setenv("COMMENT_BODY", "[update-docs]")
         monkeypatch.setenv("PR_NUMBER", "42")

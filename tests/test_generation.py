@@ -1,15 +1,13 @@
 """Tests for generation.py — AI content generation and file I/O."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from generation import (
-    load_full_content,
-    overwrite_file,
     ask_ai_for_updated_content,
     generate_updates_parallel,
+    load_full_content,
+    overwrite_file,
 )
-
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -84,9 +82,7 @@ class TestAskAiForUpdatedContent:
             patch("generation.get_client", return_value=mock_client),
             patch("generation.get_model_name", return_value="test-model"),
         ):
-            result = ask_ai_for_updated_content(
-                self.DIFF, "docs/guide.md", self.CONTENT
-            )
+            result = ask_ai_for_updated_content(self.DIFF, "docs/guide.md", self.CONTENT)
         assert result == "Updated documentation text\n"
 
     def test_returns_no_update_needed(self):
@@ -95,9 +91,7 @@ class TestAskAiForUpdatedContent:
             patch("generation.get_client", return_value=mock_client),
             patch("generation.get_model_name", return_value="test-model"),
         ):
-            result = ask_ai_for_updated_content(
-                self.DIFF, "docs/guide.md", self.CONTENT
-            )
+            result = ask_ai_for_updated_content(self.DIFF, "docs/guide.md", self.CONTENT)
         assert result == "NO_UPDATE_NEEDED"
 
     def test_detects_rst_format(self):
@@ -106,9 +100,7 @@ class TestAskAiForUpdatedContent:
             patch("generation.get_client", return_value=mock_client),
             patch("generation.get_model_name", return_value="test-model"),
         ):
-            ask_ai_for_updated_content(
-                self.DIFF, "docs/guide.rst", self.CONTENT
-            )
+            ask_ai_for_updated_content(self.DIFF, "docs/guide.rst", self.CONTENT)
         call_args = mock_client.chat.completions.create.call_args
         prompt = call_args[1]["messages"][0]["content"]
         assert "RESTRUCTUREDTEXT" in prompt
@@ -119,9 +111,7 @@ class TestAskAiForUpdatedContent:
             patch("generation.get_client", return_value=mock_client),
             patch("generation.get_model_name", return_value="test-model"),
         ):
-            ask_ai_for_updated_content(
-                self.DIFF, "docs/guide.md", self.CONTENT
-            )
+            ask_ai_for_updated_content(self.DIFF, "docs/guide.md", self.CONTENT)
         call_args = mock_client.chat.completions.create.call_args
         prompt = call_args[1]["messages"][0]["content"]
         assert "MARKDOWN" in prompt
@@ -160,14 +150,12 @@ class TestGenerateUpdatesParallel:
             patch("generation.get_client", return_value=mock_client),
             patch("generation.get_model_name", return_value="test-model"),
         ):
-            results = generate_updates_parallel(
-                self.DIFF, ["a.rst", "b.rst"], max_workers=2
-            )
+            results = generate_updates_parallel(self.DIFF, ["a.rst", "b.rst"], max_workers=2)
 
         assert len(results) == 2
         paths_returned = {r[0] for r in results}
         assert paths_returned == {"a.rst", "b.rst"}
-        for _, original, updated in results:
+        for _, _original, updated in results:
             assert updated == "Updated doc\n"
 
     def test_skips_no_update_needed(self, tmp_path, monkeypatch):
@@ -193,9 +181,7 @@ class TestGenerateUpdatesParallel:
             patch("generation.get_client", return_value=mock_client),
             patch("generation.get_model_name", return_value="test-model"),
         ):
-            results = generate_updates_parallel(
-                self.DIFF, ["a.rst", "b.rst"], max_workers=2
-            )
+            results = generate_updates_parallel(self.DIFF, ["a.rst", "b.rst"], max_workers=2)
 
         assert len(results) == 1
         assert results[0][0] == "a.rst"

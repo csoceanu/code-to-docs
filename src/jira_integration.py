@@ -6,18 +6,17 @@ in read-only mode. Fetches ticket data, linked documents (Confluence pages,
 Google Docs), and produces a feature coverage analysis using an OpenAI-compatible LLM.
 """
 
+import asyncio
+import json
 import os
 import re
-import json
-import asyncio
 import shutil
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from config import get_max_context_chars, check_context_error
-from security_utils import sanitize_output, run_command_safe
-
+from config import check_context_error, get_max_context_chars
+from security_utils import run_command_safe, sanitize_output
 
 # Google Docs URL patterns
 GDOC_PATTERN = re.compile(r"https?://docs\.google\.com/document/d/([a-zA-Z0-9_-]+)")
@@ -114,9 +113,14 @@ def fetch_google_doc(url):
     try:
         result = run_command_safe(
             [
-                "gws", "drive", "files", "export",
-                "--params", json.dumps({"fileId": doc_id, "mimeType": mime_type}),
-                "--output", output_file,
+                "gws",
+                "drive",
+                "files",
+                "export",
+                "--params",
+                json.dumps({"fileId": doc_id, "mimeType": mime_type}),
+                "--output",
+                output_file,
             ],
             check=False,
         )
@@ -124,9 +128,17 @@ def fetch_google_doc(url):
         if result.returncode != 0:
             stderr = result.stderr or ""
             if "403" in stderr or "permission" in stderr.lower():
-                return "", "", "Permission denied — ensure the doc is shared with the service account"
+                return (
+                    "",
+                    "",
+                    "Permission denied — ensure the doc is shared with the service account",
+                )
             if "file not found" in stderr.lower() or f"not found: {doc_id}" in stderr.lower():
-                return "", "", "Document not found — ensure the doc is shared with the service account"
+                return (
+                    "",
+                    "",
+                    "Document not found — ensure the doc is shared with the service account",
+                )
             return "", "", f"gws export failed (exit code {result.returncode})"
 
         # gws saves content to the output file
@@ -187,9 +199,9 @@ def _find_all_links(text):
     }
 
     # Confluence page IDs
-    for match in re.finditer(r'/wiki/spaces/[^/]+/pages/(\d+)', text):
+    for match in re.finditer(r"/wiki/spaces/[^/]+/pages/(\d+)", text):
         links["confluence_page_ids"].append(match.group(1))
-    for match in re.finditer(r'pageId=(\d+)', text):
+    for match in re.finditer(r"pageId=(\d+)", text):
         page_id = match.group(1)
         if page_id not in links["confluence_page_ids"]:
             links["confluence_page_ids"].append(page_id)
@@ -204,12 +216,12 @@ def _find_all_links(text):
                 links["google_docs_urls"].append(url)
 
     # Other URLs (skip already-matched ones and known non-doc URLs)
-    for match in re.finditer(r'https?://[^\s\)\]\"\'<>,]+', text):
+    for match in re.finditer(r"https?://[^\s\)\]\"\'<>,]+", text):
         url = match.group(0)
         # Skip Confluence and Google Docs URLs already captured
         if any(p.search(url) for p in [GDOC_PATTERN, GSLIDES_PATTERN, GSHEETS_PATTERN]):
             continue
-        if '/wiki/spaces/' in url or 'pageId=' in url:
+        if "/wiki/spaces/" in url or "pageId=" in url:
             continue
         # Skip avatar/profile image URLs
         if "gravatar.com" in url or "avatar" in url.lower():
@@ -235,7 +247,7 @@ def parse_feature_command(comment_body):
         tuple: (issue_key, instructions) or (None, None)
     """
     match = re.search(
-        r'\[review-feature\]\s+([A-Z][A-Z0-9]+-\d+)\s*(.*)',
+        r"\[review-feature\]\s+([A-Z][A-Z0-9]+-\d+)\s*(.*)",
         comment_body,
         re.IGNORECASE | re.DOTALL,
     )
@@ -309,9 +321,11 @@ async def fetch_jira_context(issue_key):
 
                 # Find all links in ticket data
                 links = _find_all_links(ticket_text)
-                print(f"Links found — Confluence: {len(links['confluence_page_ids'])}, "
-                      f"Google Docs: {len(links['google_docs_urls'])}, "
-                      f"Other: {len(links['other_urls'])}")
+                print(
+                    f"Links found — Confluence: {len(links['confluence_page_ids'])}, "
+                    f"Google Docs: {len(links['google_docs_urls'])}, "
+                    f"Other: {len(links['other_urls'])}"
+                )
 
                 # Fetch Confluence pages
                 for page_id in links["confluence_page_ids"]:
@@ -328,13 +342,17 @@ async def fetch_jira_context(issue_key):
                                 title = page_data.get("title", f"Page {page_id}")
                             except (json.JSONDecodeError, TypeError):
                                 title = f"Page {page_id}"
-                            result["spec_docs"].append({
-                                "source": "confluence",
-                                "title": title,
-                                "content": page_text,
-                            })
+                            result["spec_docs"].append(
+                                {
+                                    "source": "confluence",
+                                    "title": title,
+                                    "content": page_text,
+                                }
+                            )
                     except Exception as e:
-                        print(f"  Could not fetch Confluence page {page_id}: {sanitize_output(str(e))}")
+                        print(
+                            f"  Could not fetch Confluence page {page_id}: {sanitize_output(str(e))}"
+                        )
                         result["inaccessible_links"].append(
                             f"Confluence page {page_id} (error: {sanitize_output(str(e))})"
                         )
@@ -353,22 +371,28 @@ async def fetch_jira_context(issue_key):
                     print(f"  Could not fetch Google Doc: {error}")
                     result["inaccessible_links"].append(f"Google Doc ({url}): {error}")
                 else:
-                    result["spec_docs"].append({
-                        "source": "google_docs",
-                        "title": title,
-                        "content": content,
-                    })
+                    result["spec_docs"].append(
+                        {
+                            "source": "google_docs",
+                            "title": title,
+                            "content": content,
+                        }
+                    )
         else:
             for url in links["google_docs_urls"]:
                 result["inaccessible_links"].append(
                     f"Google Doc ({url}): gws CLI not configured (GOOGLE_SA_KEY not set)"
                 )
-            print(f"  Skipping {len(links['google_docs_urls'])} Google Docs link(s) — "
-                  f"gws CLI not configured")
+            print(
+                f"  Skipping {len(links['google_docs_urls'])} Google Docs link(s) — "
+                f"gws CLI not configured"
+            )
 
     # Flag other links
     for url in links["other_urls"]:
-        result["inaccessible_links"].append(f"External link ({url}): automated access not supported")
+        result["inaccessible_links"].append(
+            f"External link ({url}): automated access not supported"
+        )
 
     return result
 
@@ -515,8 +539,10 @@ def format_feature_review_section(issue_key, summary, analysis, inaccessible_lin
         parts.append("")
         parts.append("### ⚠️ Documents Not Accessible")
         parts.append("")
-        parts.append("The following links were found in the Jira ticket but could not be "
-                      "fetched automatically. Manual review recommended:")
+        parts.append(
+            "The following links were found in the Jira ticket but could not be "
+            "fetched automatically. Manual review recommended:"
+        )
         parts.append("")
         for link in inaccessible_links:
             parts.append(f"- {link}")

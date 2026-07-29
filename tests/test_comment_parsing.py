@@ -1,20 +1,15 @@
 """Tests for comment parsing functions in suggest_docs.py and jira_integration.py."""
 
 import json
-import os
-import re
-import subprocess
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Import the functions under test — these live in src/ (added to path by conftest)
 from comments import (
-    parse_update_instructions,
     _resolve_file_instructions,
     parse_previous_review,
+    parse_update_instructions,
 )
 from jira_integration import parse_feature_command
-
 
 # ── parse_update_instructions ────────────────────────────────────────────────
 
@@ -245,13 +240,15 @@ class TestParsePreviousReview:
         new_body = self._make_review_body(
             files_checked=["new.md"], files_unchecked=[], commit="bbb2222"
         )
-        gh_response = json.dumps({
-            "comments": [
-                {"body": old_body},
-                {"body": "unrelated comment"},
-                {"body": new_body},
-            ]
-        })
+        gh_response = json.dumps(
+            {
+                "comments": [
+                    {"body": old_body},
+                    {"body": "unrelated comment"},
+                    {"body": new_body},
+                ]
+            }
+        )
 
         with patch("comments.run_command_safe") as mock_cmd:
             mock_result = MagicMock()
@@ -275,9 +272,7 @@ class TestParseFeatureCommand:
         assert instructions == ""
 
     def test_key_with_instructions(self):
-        key, instructions = parse_feature_command(
-            "[review-feature] PROJ-456 focus on auth changes"
-        )
+        key, instructions = parse_feature_command("[review-feature] PROJ-456 focus on auth changes")
         assert key == "PROJ-456"
         assert instructions == "focus on auth changes"
 
@@ -311,7 +306,5 @@ class TestParseFeatureCommand:
         assert "second line" in instructions
 
     def test_surrounded_by_other_text(self):
-        key, _ = parse_feature_command(
-            "Some preamble\n[review-feature] DATA-42\nmore text"
-        )
+        key, _ = parse_feature_command("Some preamble\n[review-feature] DATA-42\nmore text")
         assert key == "DATA-42"

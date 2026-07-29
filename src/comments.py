@@ -12,8 +12,8 @@ import os
 import re
 from pathlib import Path
 
-from config import get_client, get_model_name, get_docs_repo_url
-from security_utils import sanitize_output, run_command_safe
+from config import get_client, get_docs_repo_url, get_model_name
+from security_utils import run_command_safe, sanitize_output
 
 
 def get_docs_file_url(file_path, commit_info=None):
@@ -30,11 +30,15 @@ def get_docs_file_url(file_path, commit_info=None):
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
     base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
 
-    if docs_subfolder and commit_info and 'repo_url' in commit_info:
+    if docs_subfolder and commit_info and "repo_url" in commit_info:
         # Same repo scenario: use source repo URL + subfolder
-        repo_url = commit_info['repo_url']
+        repo_url = commit_info["repo_url"]
         # Construct full path including docs subfolder
-        full_path = f"{docs_subfolder}/{file_path}" if not file_path.startswith(docs_subfolder) else file_path
+        full_path = (
+            f"{docs_subfolder}/{file_path}"
+            if not file_path.startswith(docs_subfolder)
+            else file_path
+        )
         return f"{repo_url}/blob/{base_branch}/{full_path}"
 
     docs_repo_url = get_docs_repo_url()
@@ -43,7 +47,9 @@ def get_docs_file_url(file_path, commit_info=None):
         # Convert SSH URL to HTTPS if needed
         repo_url = docs_repo_url
         if repo_url.startswith("git@github.com:"):
-            repo_url = repo_url.replace("git@github.com:", "https://github.com/").replace(".git", "")
+            repo_url = repo_url.replace("git@github.com:", "https://github.com/").replace(
+                ".git", ""
+            )
         elif repo_url.endswith(".git"):
             repo_url = repo_url.replace(".git", "")
         return f"{repo_url}/blob/{base_branch}/{file_path}"
@@ -87,7 +93,7 @@ Do NOT use line breaks - write as a single paragraph.
         )
         # Clean up: replace newlines with spaces for consistent formatting
         result = (response.choices[0].message.content or "").strip()
-        result = ' '.join(result.split())  # Collapse all whitespace to single spaces
+        result = " ".join(result.split())  # Collapse all whitespace to single spaces
         return result
     except Exception as e:
         print(f"Warning: Could not generate summary for {file_path}: {sanitize_output(str(e))}")
@@ -148,7 +154,7 @@ def parse_update_instructions(comment_body):
     file_instructions = {}
 
     # Find [update-docs] and everything after it
-    match = re.search(r'\[update-docs\]\s*(.*)', comment_body, re.IGNORECASE | re.DOTALL)
+    match = re.search(r"\[update-docs\]\s*(.*)", comment_body, re.IGNORECASE | re.DOTALL)
     if not match:
         return global_instructions, file_instructions
 
@@ -156,13 +162,10 @@ def parse_update_instructions(comment_body):
     if not after_command:
         return global_instructions, file_instructions
 
-    lines = after_command.split('\n')
+    lines = after_command.split("\n")
 
     # Match lines where the part before ":" looks like a doc file path
-    file_pattern = re.compile(
-        r'^([\w./_-]*\.(?:rst|md|adoc))\s*:\s*(.+)$',
-        re.IGNORECASE
-    )
+    file_pattern = re.compile(r"^([\w./_-]*\.(?:rst|md|adoc))\s*:\s*(.+)$", re.IGNORECASE)
 
     # First line is global instructions, unless it matches the per-file pattern
     first_line = lines[0].strip()
@@ -216,7 +219,7 @@ def _resolve_file_instructions(file_path, file_instructions):
         if pattern == basename:
             return instruction
         # Suffix match (e.g. 'admin/config.rst' matches 'docs/admin/config.rst')
-        if file_path.endswith('/' + pattern):
+        if file_path.endswith("/" + pattern):
             return instruction
 
     return ""
@@ -261,7 +264,9 @@ def parse_previous_review(pr_number):
         )
 
         if cmd_result.returncode != 0:
-            print(f"Warning: Could not fetch PR comments: {sanitize_output(cmd_result.stderr or '')}")
+            print(
+                f"Warning: Could not fetch PR comments: {sanitize_output(cmd_result.stderr or '')}"
+            )
             return result
 
         data = json.loads(cmd_result.stdout)
@@ -286,17 +291,18 @@ def parse_previous_review(pr_number):
         # Patterns: '- [x] [path](url): summary' or '- [x] **path**: summary'
         # and:      '- [ ] [path](url): summary' or '- [ ] **path**: summary'
         checkbox_pattern = re.compile(
-            r'^- \[([ xX])\] '           # checkbox
-            r'(?:'
-            r'\[([^\]]+)\]\([^)]+\)'     # [path](url) form
-            r'|'
-            r'\*\*([^*]+)\*\*'           # **path** form
-            r')'
-            r':'                          # colon separator
-        , re.MULTILINE)
+            r"^- \[([ xX])\] "  # checkbox
+            r"(?:"
+            r"\[([^\]]+)\]\([^)]+\)"  # [path](url) form
+            r"|"
+            r"\*\*([^*]+)\*\*"  # **path** form
+            r")"
+            r":",  # colon separator
+            re.MULTILINE,
+        )
 
         for match in checkbox_pattern.finditer(review_body):
-            checked = match.group(1).lower() == 'x'
+            checked = match.group(1).lower() == "x"
             file_path = match.group(2) or match.group(3)
             file_path = file_path.strip()
             if checked:
@@ -305,7 +311,7 @@ def parse_previous_review(pr_number):
                 result["rejected_files"].append(file_path)
 
         # Parse the commit hash from 'Latest commit: `abc1234`'
-        commit_match = re.search(r'Latest commit: `([a-f0-9]+)`', review_body)
+        commit_match = re.search(r"Latest commit: `([a-f0-9]+)`", review_body)
         if commit_match:
             result["review_commit"] = commit_match.group(1)
 
@@ -321,7 +327,9 @@ def parse_previous_review(pr_number):
         return result
 
 
-def post_review_comment(files_with_content, pr_number, commit_info=None, include_full_content=True, feature_section=""):
+def post_review_comment(
+    files_with_content, pr_number, commit_info=None, include_full_content=True, feature_section=""
+):
     """
     Post a review comment on the PR with documentation suggestions
 
@@ -341,13 +349,15 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
     comment_parts.append("")
 
     if commit_info:
-        if 'pr_number' in commit_info:
+        if "pr_number" in commit_info:
             comment_parts.append(f"Analyzed PR: {commit_info['pr_url']}")
         comment_parts.append(f"Latest commit: `{commit_info['short_hash']}`")
         comment_parts.append("")
 
     if not files_with_content:
-        comment_parts.append("\u2705 **No documentation updates needed** - all docs are up to date!")
+        comment_parts.append(
+            "\u2705 **No documentation updates needed** - all docs are up to date!"
+        )
         comment_body = "\n".join(comment_parts)
     else:
         # Generate plain-English summary and filter out files with no real changes
@@ -356,7 +366,9 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
 
         # Use filtered files (excludes files where AI said "no changes")
         if not filtered_files:
-            comment_parts.append("\u2705 **No documentation updates needed** - all docs are up to date!")
+            comment_parts.append(
+                "\u2705 **No documentation updates needed** - all docs are up to date!"
+            )
             comment_body = "\n".join(comment_parts)
         else:
             comment_parts.append(f"Found **{len(filtered_files)} file(s)** that may need updates:")
@@ -387,16 +399,18 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
                         comment_parts.append(f"#### \U0001f4c4 `{file_path}`")
                     comment_parts.append("")
                     comment_parts.append("<details>")
-                    comment_parts.append(f"<summary><b>View proposed changes</b></summary>")
+                    comment_parts.append("<summary><b>View proposed changes</b></summary>")
                     comment_parts.append("")
                     # Show diff instead of full content
-                    diff_lines = list(difflib.unified_diff(
-                        original.splitlines(keepends=True),
-                        new_content.splitlines(keepends=True),
-                        fromfile=f"a/{file_path}",
-                        tofile=f"b/{file_path}",
-                        n=3,
-                    ))
+                    diff_lines = list(
+                        difflib.unified_diff(
+                            original.splitlines(keepends=True),
+                            new_content.splitlines(keepends=True),
+                            fromfile=f"a/{file_path}",
+                            tofile=f"b/{file_path}",
+                            n=3,
+                        )
+                    )
                     if diff_lines:
                         comment_parts.append("```diff")
                         comment_parts.append("".join(diff_lines))
@@ -412,12 +426,20 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
         comment_parts.append("\U0001f4a1 **Next Steps**:")
         comment_parts.append("- **Uncheck** any files above that you don't want updated")
         if not include_full_content:
-            comment_parts.append("- When ready, comment `[\u200bupdate-docs]` to generate a PR with only the checked files")
+            comment_parts.append(
+                "- When ready, comment `[\u200bupdate-docs]` to generate a PR with only the checked files"
+            )
         else:
-            comment_parts.append("- When ready, comment `[\u200bupdate-docs]` to create a PR with only the checked files")
+            comment_parts.append(
+                "- When ready, comment `[\u200bupdate-docs]` to create a PR with only the checked files"
+            )
         comment_parts.append("- You can add instructions in your `[\u200bupdate-docs]` comment:")
-        comment_parts.append("  - **Global** (first line): `[\u200bupdate-docs] keep changes minimal, don't add new sections`")
-        comment_parts.append("  - **Per-file** (next lines): `config-ref.rst: only update the CLI usage example`")
+        comment_parts.append(
+            "  - **Global** (first line): `[\u200bupdate-docs] keep changes minimal, don't add new sections`"
+        )
+        comment_parts.append(
+            "  - **Per-file** (next lines): `config-ref.rst: only update the CLI usage example`"
+        )
         comment_parts.append("")
         comment_parts.append("*Powered by code-to-docs AI* \u2728")
 
@@ -441,7 +463,7 @@ def post_review_comment(files_with_content, pr_number, commit_info=None, include
         result = run_command_safe(
             ["gh", "pr", "comment", str(pr_number), "--body-file", str(comment_file)],
             env={**os.environ, "GH_TOKEN": gh_token},
-            check=False
+            check=False,
         )
 
         if result.returncode == 0:

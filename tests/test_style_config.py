@@ -1,14 +1,10 @@
 """Tests for persistent style configuration and output format validation."""
 
 import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from config import load_style_config
 from generation import strip_code_fences, validate_format
-
 
 # =============================================================================
 # load_style_config tests
@@ -168,7 +164,9 @@ class TestRetryLoop:
     @patch("generation.get_client")
     @patch("generation.get_model_name", return_value="test-model")
     @patch("generation.get_max_context_chars", return_value=400_000)
-    def test_retries_on_invalid_format_then_succeeds(self, mock_budget, mock_model, mock_client, mock_validate):
+    def test_retries_on_invalid_format_then_succeeds(
+        self, mock_budget, mock_model, mock_client, mock_validate
+    ):
         # First call: initial generation returns content that fails validation
         # Second call: retry returns content that passes validation
         mock_response_1 = MagicMock()
@@ -190,6 +188,7 @@ class TestRetryLoop:
         ]
 
         from generation import ask_ai_for_updated_content
+
         result = ask_ai_for_updated_content(
             diff="diff --git a/foo.py\n+new line",
             file_path="docs/guide.rst",
@@ -211,6 +210,7 @@ class TestRetryLoop:
         mock_client.return_value = client
 
         from generation import ask_ai_for_updated_content
+
         result = ask_ai_for_updated_content(
             diff="diff --git a/foo.py\n+new line",
             file_path="docs/guide.md",

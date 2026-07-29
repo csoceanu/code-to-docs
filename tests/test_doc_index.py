@@ -1,37 +1,35 @@
 """Tests for doc_index.py — indexing, manifest management, and summary caching."""
 
-import json
 import hashlib
-import pytest
-
 import os
 
+import pytest
+
 from doc_index import (
-    working_directory,
-    hash_file,
-    get_docs_root,
-    get_doc_folders,
-    get_docs_in_folder,
-    load_manifest,
-    save_manifest,
-    get_folder_doc_hashes,
-    folder_needs_reindex,
-    save_index,
-    load_index,
-    load_all_indexes,
-    indexes_exist,
-    get_summaries_dir,
-    get_summary_filename,
-    load_summaries_manifest,
-    save_summaries_manifest,
-    load_cached_summary,
-    save_summary,
-    get_or_generate_summary,
-    summaries_exist,
     INDEX_DIR,
     SUMMARIES_DIR,
+    folder_needs_reindex,
+    get_doc_folders,
+    get_docs_in_folder,
+    get_docs_root,
+    get_folder_doc_hashes,
+    get_or_generate_summary,
+    get_summaries_dir,
+    get_summary_filename,
+    hash_file,
+    indexes_exist,
+    load_all_indexes,
+    load_cached_summary,
+    load_index,
+    load_manifest,
+    load_summaries_manifest,
+    save_index,
+    save_manifest,
+    save_summaries_manifest,
+    save_summary,
+    summaries_exist,
+    working_directory,
 )
-
 
 # ── working_directory ────────────────────────────────────────────────────────
 
@@ -55,9 +53,8 @@ class TestWorkingDirectory:
         original = os.getcwd()
         target = tmp_path / "subdir"
         target.mkdir()
-        with pytest.raises(ValueError):
-            with working_directory(target):
-                raise ValueError("boom")
+        with pytest.raises(ValueError), working_directory(target):
+            raise ValueError("boom")
         assert os.getcwd() == original
 
 
@@ -117,6 +114,7 @@ class TestGetDocsRoot:
 class TestGetDocFolders:
     def test_finds_doc_folders(self, doc_tree):
         from doc_index import ROOT_LEVEL_FOLDER
+
         folders = get_doc_folders(docs_root=doc_tree)
         assert "guides/operations" in folders
         assert "guides/configuration" in folders
@@ -192,12 +190,7 @@ class TestManifest:
         assert (tmp_path / INDEX_DIR).is_dir()
 
     def test_save_and_load_roundtrip(self, tmp_path):
-        original = {
-            "version": "1.0",
-            "folders": {
-                "guides": {"doc_hashes": {"file.rst": "abc123"}}
-            }
-        }
+        original = {"version": "1.0", "folders": {"guides": {"doc_hashes": {"file.rst": "abc123"}}}}
         save_manifest(original, docs_root=tmp_path)
         loaded = load_manifest(docs_root=tmp_path)
         assert loaded["version"] == original["version"]
@@ -362,7 +355,7 @@ class TestSummariesManifest:
 class TestSummaryCaching:
     def test_save_and_load_cached_summary(self, doc_tree):
         # Reset the debug flag if it exists from previous tests
-        if hasattr(load_cached_summary, '_debug_shown'):
+        if hasattr(load_cached_summary, "_debug_shown"):
             del load_cached_summary._debug_shown
 
         file_path = "guides/operations/health-checks.rst"
@@ -373,7 +366,7 @@ class TestSummaryCaching:
         assert cached == summary
 
     def test_cache_invalidated_on_change(self, doc_tree):
-        if hasattr(load_cached_summary, '_debug_shown'):
+        if hasattr(load_cached_summary, "_debug_shown"):
             del load_cached_summary._debug_shown
 
         file_path = "guides/operations/health-checks.rst"
@@ -386,7 +379,7 @@ class TestSummaryCaching:
         assert cached is None  # Hash mismatch
 
     def test_cache_miss_when_no_summary(self, doc_tree):
-        if hasattr(load_cached_summary, '_debug_shown'):
+        if hasattr(load_cached_summary, "_debug_shown"):
             del load_cached_summary._debug_shown
 
         cached = load_cached_summary("guides/operations/health-checks.rst", docs_root=doc_tree)
@@ -400,7 +393,7 @@ class TestSummaryCaching:
         assert summaries_exist(docs_root=tmp_path) is False
 
     def test_get_or_generate_uses_cache(self, doc_tree):
-        if hasattr(load_cached_summary, '_debug_shown'):
+        if hasattr(load_cached_summary, "_debug_shown"):
             del load_cached_summary._debug_shown
 
         file_path = "guides/operations/health-checks.rst"
@@ -422,7 +415,7 @@ class TestSummaryCaching:
         assert generator_called is False
 
     def test_get_or_generate_calls_generator_on_miss(self, doc_tree):
-        if hasattr(load_cached_summary, '_debug_shown'):
+        if hasattr(load_cached_summary, "_debug_shown"):
             del load_cached_summary._debug_shown
 
         file_path = "tutorials/getting-started.md"

@@ -1,11 +1,8 @@
 """Tests for truncation helpers in config.py."""
 
-import os
-import pytest
 from unittest.mock import MagicMock
 
-from config import get_max_context_chars, truncate_content, truncate_diff, check_context_error
-
+from config import check_context_error, get_max_context_chars, truncate_content, truncate_diff
 
 # =============================================================================
 # get_max_context_chars
@@ -168,6 +165,7 @@ class TestCheckContextError:
     def _make_bad_request_error(self, message):
         """Create a mock openai.BadRequestError with the given message."""
         import openai
+
         err = openai.BadRequestError(
             message=message,
             response=MagicMock(status_code=400),
@@ -176,9 +174,7 @@ class TestCheckContextError:
         return err
 
     def test_detects_context_length_error(self, capsys):
-        err = self._make_bad_request_error(
-            "This model's maximum context length is 4097 tokens."
-        )
+        err = self._make_bad_request_error("This model's maximum context length is 4097 tokens.")
         assert check_context_error(err) is True
         output = capsys.readouterr().out
         assert "MAX_CONTEXT_CHARS" in output
@@ -198,9 +194,7 @@ class TestCheckContextError:
         assert check_context_error(err) is False
 
     def test_does_not_raise(self):
-        err = self._make_bad_request_error(
-            "maximum context length exceeded"
-        )
+        err = self._make_bad_request_error("maximum context length exceeded")
         # Should return True without raising
         result = check_context_error(err)
         assert result is True

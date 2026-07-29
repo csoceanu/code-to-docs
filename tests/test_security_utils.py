@@ -1,18 +1,17 @@
 """Tests for security_utils.py — the highest-risk module in the action."""
 
-import os
 import subprocess
+
 import pytest
 
 from security_utils import (
-    sanitize_output,
     run_command_safe,
-    validate_file_path,
+    sanitize_output,
     setup_git_credentials,
     validate_docs_file_extension,
     validate_docs_subfolder,
+    validate_file_path,
 )
-
 
 # ── sanitize_output ──────────────────────────────────────────────────────────
 

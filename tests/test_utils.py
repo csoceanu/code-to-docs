@@ -1,11 +1,10 @@
 """Tests for utils module — retry_with_backoff decorator and calc_backoff_delay helper."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from utils import retry_with_backoff, calc_backoff_delay
-
+from utils import calc_backoff_delay, retry_with_backoff
 
 # ── calc_backoff_delay ─────────────────────────────────────────────────────
 
@@ -53,8 +52,8 @@ class TestRetryWithBackoff:
         assert len(calls) == 3
         # Sleep called twice (after attempt 0 and 1, not after final success)
         assert mock_sleep.call_count == 2
-        mock_sleep.assert_any_call(2)   # attempt 0: (0+1)*2 = 2
-        mock_sleep.assert_any_call(4)   # attempt 1: (1+1)*2 = 4
+        mock_sleep.assert_any_call(2)  # attempt 0: (0+1)*2 = 2
+        mock_sleep.assert_any_call(4)  # attempt 1: (1+1)*2 = 4
 
     @patch("utils.time.sleep")
     def test_returns_default_on_exhaustion(self, mock_sleep):
@@ -95,10 +94,10 @@ class TestRetryWithBackoff:
         assert callback.call_count == 2
         # First call: attempt=0, max_retries=3, exception, wait_time=3
         args = callback.call_args_list[0][0]
-        assert args[0] == 0          # attempt
-        assert args[1] == 3          # max_retries
+        assert args[0] == 0  # attempt
+        assert args[1] == 3  # max_retries
         assert isinstance(args[2], RuntimeError)
-        assert args[3] == 3          # wait_time: (0+1)*3
+        assert args[3] == 3  # wait_time: (0+1)*3
 
     @patch("utils.time.sleep")
     def test_delay_multiplier(self, mock_sleep):
@@ -109,6 +108,6 @@ class TestRetryWithBackoff:
         always_fail()
         # Sleep called 3 times (not after last attempt)
         assert mock_sleep.call_count == 3
-        mock_sleep.assert_any_call(5)    # (0+1)*5
-        mock_sleep.assert_any_call(10)   # (1+1)*5
-        mock_sleep.assert_any_call(15)   # (2+1)*5
+        mock_sleep.assert_any_call(5)  # (0+1)*5
+        mock_sleep.assert_any_call(10)  # (1+1)*5
+        mock_sleep.assert_any_call(15)  # (2+1)*5

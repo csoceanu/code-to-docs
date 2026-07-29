@@ -7,12 +7,11 @@ and pushing/creating PRs in the documentation repo.
 
 import os
 import subprocess
-from pathlib import Path
 
-from config import get_docs_repo_url, get_branch_name
+from config import get_branch_name, get_docs_repo_url
 from security_utils import (
-    sanitize_output,
     run_command_safe,
+    sanitize_output,
     setup_git_credentials,
     validate_docs_subfolder,
 )
@@ -29,35 +28,25 @@ def get_diff():
     print(f"Getting diff for PR #{pr_number} against base: {pr_base}")
 
     try:
-        merge_base_result = run_command_safe(
-            ["git", "merge-base", pr_base, "HEAD"],
-            check=False
-        )
+        merge_base_result = run_command_safe(["git", "merge-base", pr_base, "HEAD"], check=False)
 
         if merge_base_result.returncode == 0:
             merge_base = merge_base_result.stdout.strip()
             print(f"Using merge-base: {merge_base[:7]}...{merge_base[-7:]}")
 
             files_result = run_command_safe(
-                ["git", "diff", "--name-only", f"{merge_base}...HEAD"],
-                check=False
+                ["git", "diff", "--name-only", f"{merge_base}...HEAD"], check=False
             )
             if files_result.returncode == 0:
-                changed_files = files_result.stdout.strip().split('\n')
+                changed_files = files_result.stdout.strip().split("\n")
                 changed_files = [f for f in changed_files if f.strip()]
                 print(f"Files changed in entire PR: {changed_files}")
 
-            result = run_command_safe(
-                ["git", "diff", f"{merge_base}...HEAD"],
-                check=False
-            )
+            result = run_command_safe(["git", "diff", f"{merge_base}...HEAD"], check=False)
             diff_method = f"merge-base ({merge_base[:7]}...HEAD)"
         else:
             print("Warning: Could not find merge-base, using fallback diff method")
-            result = run_command_safe(
-                ["git", "diff", f"{pr_base}...HEAD"],
-                check=False
-            )
+            result = run_command_safe(["git", "diff", f"{pr_base}...HEAD"], check=False)
             diff_method = f"direct ({pr_base}...HEAD)"
 
         diff_content = result.stdout.strip() if result.stdout else ""
@@ -78,39 +67,31 @@ def get_commit_info():
     try:
         pr_number = os.environ.get("PR_NUMBER")
 
-        current_commit_result = run_command_safe(
-            ["git", "rev-parse", "HEAD"],
-            check=False
-        )
+        current_commit_result = run_command_safe(["git", "rev-parse", "HEAD"], check=False)
         if current_commit_result.returncode != 0:
             return None
         commit_hash = current_commit_result.stdout.strip()
 
-        remote_url = run_command_safe(
-            ["git", "config", "--get", "remote.origin.url"],
-            check=False
-        )
+        remote_url = run_command_safe(["git", "config", "--get", "remote.origin.url"], check=False)
         if remote_url.returncode != 0:
             return None
 
         # Convert SSH URL to HTTPS if needed
         repo_url = remote_url.stdout.strip()
         if repo_url.startswith("git@github.com:"):
-            repo_url = repo_url.replace("git@github.com:", "https://github.com/").replace(".git", "")
+            repo_url = repo_url.replace("git@github.com:", "https://github.com/").replace(
+                ".git", ""
+            )
         elif repo_url.endswith(".git"):
             repo_url = repo_url.replace(".git", "")
 
         short_hash = commit_hash[:7]
 
-        result = {
-            'repo_url': repo_url,
-            'current_commit': commit_hash,
-            'short_hash': short_hash
-        }
+        result = {"repo_url": repo_url, "current_commit": commit_hash, "short_hash": short_hash}
 
         if pr_number and pr_number.strip() and pr_number != "unknown":
-            result['pr_number'] = pr_number
-            result['pr_url'] = f"{repo_url}/pull/{pr_number}"
+            result["pr_number"] = pr_number
+            result["pr_url"] = f"{repo_url}/pull/{pr_number}"
 
         return result
 
@@ -153,8 +134,7 @@ def setup_docs_environment():
             os.chdir("docs_repo")
 
             result = run_command_safe(
-                ["git", "ls-remote", "--heads", "origin", branch_name],
-                check=False
+                ["git", "ls-remote", "--heads", "origin", branch_name], check=False
             )
 
             if result.stdout and result.stdout.strip():
@@ -184,7 +164,7 @@ def push_and_open_pr(modified_files, commit_info=None):
 
         commit_msg = "Auto-generated doc updates from code changes"
         if commit_info:
-            if 'pr_number' in commit_info:
+            if "pr_number" in commit_info:
                 commit_msg += f"\n\nPR Link: {commit_info['pr_url']}"
                 commit_msg += f"\nLatest commit: {commit_info['short_hash']}"
             else:
@@ -205,7 +185,7 @@ def push_and_open_pr(modified_files, commit_info=None):
             check=False,
             capture_output=False,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
         )
 
         docs_repo_url = get_docs_repo_url()
@@ -215,7 +195,7 @@ def push_and_open_pr(modified_files, commit_info=None):
         print(f"Pushing to branch {branch_name}...")
         run_command_safe(
             ["git", "push", "--set-upstream", "origin", branch_name, "--force-with-lease"],
-            check=True
+            check=True,
         )
         print("✅ Successfully pushed changes")
 
@@ -224,19 +204,18 @@ def push_and_open_pr(modified_files, commit_info=None):
         pr_body += "\n".join([f"- `{f}`" for f in modified_files])
         if commit_info:
             pr_body += "\n\n---\n**Source:**\n"
-            if 'pr_number' in commit_info:
+            if "pr_number" in commit_info:
                 pr_body += f"- PR: {commit_info['pr_url']}\n"
             pr_body += f"- Commit: `{commit_info['short_hash']}`"
         pr_body += "\n\n*Assisted by code-to-docs AI*"
 
         # Check if PR already exists for this branch
         print("Checking for existing pull request...")
-        check_pr = run_command_safe([
-            "gh", "pr", "list",
-            "--head", branch_name,
-            "--state", "open",
-            "--json", "number"
-        ], check=False, env={**os.environ, "GH_TOKEN": gh_token})
+        check_pr = run_command_safe(
+            ["gh", "pr", "list", "--head", branch_name, "--state", "open", "--json", "number"],
+            check=False,
+            env={**os.environ, "GH_TOKEN": gh_token},
+        )
 
         existing_pr = check_pr.stdout.strip() if check_pr.returncode == 0 else "[]"
 
@@ -244,13 +223,23 @@ def push_and_open_pr(modified_files, commit_info=None):
             print("✅ Existing PR found — branch updated with new changes")
         else:
             print("Creating pull request...")
-            run_command_safe([
-                "gh", "pr", "create",
-                "--title", "Auto-Generated Doc Updates from Code PR",
-                "--body", pr_body,
-                "--base", os.environ.get("DOCS_BASE_BRANCH", "main"),
-                "--head", branch_name
-            ], check=True, env={**os.environ, "GH_TOKEN": gh_token})
+            run_command_safe(
+                [
+                    "gh",
+                    "pr",
+                    "create",
+                    "--title",
+                    "Auto-Generated Doc Updates from Code PR",
+                    "--body",
+                    pr_body,
+                    "--base",
+                    os.environ.get("DOCS_BASE_BRANCH", "main"),
+                    "--head",
+                    branch_name,
+                ],
+                check=True,
+                env={**os.environ, "GH_TOKEN": gh_token},
+            )
             print("✅ Successfully created PR")
 
     except subprocess.CalledProcessError as e:
