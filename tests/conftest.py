@@ -2,6 +2,7 @@
 
 import os
 import sys
+
 import pytest
 
 # Add src/ to the path so we can import modules directly
@@ -72,9 +73,7 @@ def doc_tree(tmp_path):
     (ops / "health-checks.rst").write_text(
         "Health Checks\n=============\n\nHealth check reference."
     )
-    (ops / "monitoring.rst").write_text(
-        "Monitoring\n==========\n\nHow to monitor your system."
-    )
+    (ops / "monitoring.rst").write_text("Monitoring\n==========\n\nHow to monitor your system.")
     conf = tmp_path / "guides" / "configuration"
     conf.mkdir(parents=True)
     (conf / "config-ref.rst").write_text(

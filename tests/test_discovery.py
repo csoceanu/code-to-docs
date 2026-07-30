@@ -1,17 +1,15 @@
 """Tests for discovery.py — AI-powered file discovery and selection."""
 
-import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from discovery import (
-    summarize_long_file,
-    get_file_content_or_summaries,
     _process_file_selection_batch,
     ask_ai_for_relevant_files,
+    get_file_content_or_summaries,
+    summarize_long_file,
 )
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,8 +30,10 @@ def _mock_ai_response(content):
 class TestSummarizeLongFile:
     def test_returns_summary(self):
         mock_client = _mock_ai_response("This file documents health checks.")
-        with patch("discovery.get_client", return_value=mock_client), \
-             patch("discovery.get_model_name", return_value="test-model"):
+        with (
+            patch("discovery.get_client", return_value=mock_client),
+            patch("discovery.get_model_name", return_value="test-model"),
+        ):
             result = summarize_long_file("health-checks.rst", "long content here")
         assert result == "This file documents health checks."
         mock_client.chat.completions.create.assert_called_once()
@@ -51,8 +51,10 @@ class TestSummarizeLongFile:
 
         mock_client.chat.completions.create.side_effect = [empty_response, good_response]
 
-        with patch("discovery.get_client", return_value=mock_client), \
-             patch("discovery.get_model_name", return_value="test-model"):
+        with (
+            patch("discovery.get_client", return_value=mock_client),
+            patch("discovery.get_model_name", return_value="test-model"),
+        ):
             result = summarize_long_file("file.rst", "content")
 
         assert result == "Summary after retry"
@@ -65,9 +67,11 @@ class TestSummarizeLongFile:
         empty_response.choices[0].message.content = ""
         mock_client.chat.completions.create.return_value = empty_response
 
-        with patch("discovery.get_client", return_value=mock_client), \
-             patch("discovery.get_model_name", return_value="test-model"), \
-             pytest.raises(Exception, match="Failed to summarize"):
+        with (
+            patch("discovery.get_client", return_value=mock_client),
+            patch("discovery.get_model_name", return_value="test-model"),
+            pytest.raises(Exception, match="Failed to summarize"),
+        ):
             summarize_long_file("file.rst", "content", max_retries=1)
 
 
@@ -123,8 +127,10 @@ class TestProcessFileSelectionBatch:
         mock_client = _mock_ai_response("file1.rst\nfile2.md")
         batch = [("file1.rst", "preview1"), ("file2.md", "preview2"), ("file3.rst", "preview3")]
 
-        with patch("discovery.get_client", return_value=mock_client), \
-             patch("discovery.get_model_name", return_value="test-model"):
+        with (
+            patch("discovery.get_client", return_value=mock_client),
+            patch("discovery.get_model_name", return_value="test-model"),
+        ):
             batch_num, files = _process_file_selection_batch(
                 "some diff", batch, batch_num=1, total_batches=1
             )
@@ -136,8 +142,10 @@ class TestProcessFileSelectionBatch:
         mock_client = _mock_ai_response("NONE")
         batch = [("file1.rst", "preview1")]
 
-        with patch("discovery.get_client", return_value=mock_client), \
-             patch("discovery.get_model_name", return_value="test-model"):
+        with (
+            patch("discovery.get_client", return_value=mock_client),
+            patch("discovery.get_model_name", return_value="test-model"),
+        ):
             batch_num, files = _process_file_selection_batch(
                 "some diff", batch, batch_num=1, total_batches=1
             )
@@ -148,8 +156,10 @@ class TestProcessFileSelectionBatch:
         mock_client = _mock_ai_response("file.rst\nscript.py")
         batch = [("file.rst", "preview1"), ("script.py", "preview2")]
 
-        with patch("discovery.get_client", return_value=mock_client), \
-             patch("discovery.get_model_name", return_value="test-model"):
+        with (
+            patch("discovery.get_client", return_value=mock_client),
+            patch("discovery.get_model_name", return_value="test-model"),
+        ):
             batch_num, files = _process_file_selection_batch(
                 "some diff", batch, batch_num=1, total_batches=1
             )

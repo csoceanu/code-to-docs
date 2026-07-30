@@ -9,28 +9,31 @@ fallback full-scan path for repos without indexes.
 
 import os
 import time
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 # Import configuration
 from config import (
-    get_client, get_model_name, get_max_context_chars,
-    truncate_content, check_context_error,
+    check_context_error,
+    get_client,
+    get_max_context_chars,
+    get_model_name,
+    truncate_content,
+)
+
+# Import documentation index module
+from doc_index import (
+    build_all_indexes,
+    commit_indexes_to_repo,
+    fetch_indexes_from_main,
+    find_relevant_files_from_indexes,
+    indexes_exist,
+    update_indexes_if_needed,
 )
 
 # Import security utilities
 from security_utils import sanitize_output
 from utils import calc_backoff_delay
-
-# Import documentation index module
-from doc_index import (
-    indexes_exist,
-    fetch_indexes_from_main,
-    build_all_indexes,
-    update_indexes_if_needed,
-    find_relevant_files_from_indexes,
-    commit_indexes_to_repo,
-)
 
 
 def summarize_long_file(file_path, content, max_retries=3):
@@ -55,7 +58,9 @@ Provide a detailed summary that would help an AI system understand when this fil
 """
 
     content_budget = get_max_context_chars() - len(prompt_template)
-    truncated_content = truncate_content(content, content_budget, label=f"summary input for {file_path}")
+    truncated_content = truncate_content(
+        content, content_budget, label=f"summary input for {file_path}"
+    )
 
     prompt = prompt_template.replace("{CONTENT_PLACEHOLDER}", truncated_content)
 
@@ -75,11 +80,14 @@ Provide a detailed summary that would help an AI system understand when this fil
         except Exception as e:
             error_str = sanitize_output(str(e))
             wait_time = calc_backoff_delay(attempt, multiplier=3)
-            print(f"Error for {file_path} (attempt {attempt + 1}/{max_retries}): {error_str}, waiting {wait_time}s...")
+            print(
+                f"Error for {file_path} (attempt {attempt + 1}/{max_retries}): {error_str}, waiting {wait_time}s..."
+            )
 
             time.sleep(wait_time)
 
     raise Exception(f"Failed to summarize {file_path} after {max_retries} attempts")
+
 
 def get_file_content_or_summaries(line_threshold=300):
     """Get file content - full content for short files, AI summaries for long files"""
@@ -111,7 +119,7 @@ def get_file_content_or_summaries(line_threshold=300):
                 content = f.read()
 
             # Check file length and decide what to use
-            line_count = len(content.split('\n'))
+            line_count = len(content.split("\n"))
 
             if line_count > line_threshold:
                 # Long file - generate summary
@@ -129,6 +137,7 @@ def get_file_content_or_summaries(line_threshold=300):
 
     print(f"Collected {len(file_data)} files for processing")
     return file_data
+
 
 _FILE_SELECTION_PROMPT_TEMPLATE = """
     You are a precise documentation assistant. Select files that document the feature, component, or behavior being changed or extended in the diff.
@@ -181,8 +190,10 @@ def _batch_file_previews_by_budget(file_previews, available_for_files):
     for fname, preview in file_previews:
         entry_size = len(f"File: {fname}\nPreview:\n{preview}") + 4  # separator overhead
 
-        if current_batch and (current_size + entry_size > available_for_files
-                              or len(current_batch) >= MAX_FILES_PER_BATCH):
+        if current_batch and (
+            current_size + entry_size > available_for_files
+            or len(current_batch) >= MAX_FILES_PER_BATCH
+        ):
             batches.append(current_batch)
             current_batch = []
             current_size = 0
@@ -198,11 +209,11 @@ def _batch_file_previews_by_budget(file_previews, available_for_files):
 
 def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_retries=3):
     """Process a single batch of files for relevance selection."""
-    context = "\n\n".join(
-        [f"File: {fname}\nPreview:\n{preview}" for fname, preview in batch]
-    )
+    context = "\n\n".join([f"File: {fname}\nPreview:\n{preview}" for fname, preview in batch])
 
-    prompt = _FILE_SELECTION_PROMPT_TEMPLATE.replace("{DIFF_PLACEHOLDER}", diff).replace("{CONTEXT_PLACEHOLDER}", context)
+    prompt = _FILE_SELECTION_PROMPT_TEMPLATE.replace("{DIFF_PLACEHOLDER}", diff).replace(
+        "{CONTEXT_PLACEHOLDER}", context
+    )
 
     for attempt in range(max_retries):
         try:
@@ -224,10 +235,18 @@ def _process_file_selection_batch(diff, batch, batch_num, total_batches, max_ret
 
             # Filter to only documentation files
             suggested_files = [line.strip() for line in result_text.splitlines() if line.strip()]
-            filtered_files = [f for f in suggested_files if f.endswith('.adoc') or f.endswith('.md') or f.endswith('.rst')]
+            filtered_files = [
+                f
+                for f in suggested_files
+                if f.endswith(".adoc") or f.endswith(".md") or f.endswith(".rst")
+            ]
 
             if len(filtered_files) != len(suggested_files):
-                skipped = [f for f in suggested_files if not (f.endswith('.adoc') or f.endswith('.md') or f.endswith('.rst'))]
+                skipped = [
+                    f
+                    for f in suggested_files
+                    if not (f.endswith(".adoc") or f.endswith(".md") or f.endswith(".rst"))
+                ]
                 print(f"Batch {batch_num}: Skipping non-documentation files: {skipped}")
 
             print(f"Batch {batch_num}: Found {len(filtered_files)} relevant files")
@@ -260,12 +279,16 @@ def ask_ai_for_relevant_files(diff, file_previews, max_workers=5):
     batches = [(batch, i + 1) for i, batch in enumerate(batches_raw)]
 
     total_batches = len(batches)
-    print(f"Processing {len(file_previews)} files in {total_batches} batches (parallel, {max_workers} workers)...")
+    print(
+        f"Processing {len(file_previews)} files in {total_batches} batches (parallel, {max_workers} workers)..."
+    )
 
     # Process batches in parallel
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_process_file_selection_batch, diff, batch, batch_num, total_batches): batch_num
+            executor.submit(
+                _process_file_selection_batch, diff, batch, batch_num, total_batches
+            ): batch_num
             for batch, batch_num in batches
         }
 
@@ -280,9 +303,9 @@ def ask_ai_for_relevant_files(diff, file_previews, max_workers=5):
         for f in all_relevant_files:
             # Remove the subfolder prefix if present (e.g., "subfolder/file.rst" -> "file.rst")
             if f.startswith(docs_subfolder + "/"):
-                cleaned_files.append(f[len(docs_subfolder) + 1:])
+                cleaned_files.append(f[len(docs_subfolder) + 1 :])
             elif f.startswith(docs_subfolder):
-                cleaned_files.append(f[len(docs_subfolder):].lstrip("/"))
+                cleaned_files.append(f[len(docs_subfolder) :].lstrip("/"))
             else:
                 cleaned_files.append(f)
         all_relevant_files = cleaned_files

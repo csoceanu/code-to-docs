@@ -24,6 +24,7 @@ def retry_with_backoff(
     Returns:
         Decorated function with retry logic
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -41,7 +42,9 @@ def retry_with_backoff(
             if reraise and last_exception:
                 raise last_exception
             return default
+
         return wrapper
+
     return decorator
 
 

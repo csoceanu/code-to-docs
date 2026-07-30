@@ -2,14 +2,13 @@
 
 import os
 import sys
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # config.py imports openai at module level; stub it out so tests don't
 # require the openai package to be installed.
 sys.modules.setdefault("openai", MagicMock())
 
-from github_ops import get_diff, get_commit_info, setup_docs_environment
+from github_ops import get_commit_info, get_diff, setup_docs_environment
 
 
 def _mock_cmd_result(stdout="", returncode=0, stderr=""):

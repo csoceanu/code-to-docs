@@ -202,6 +202,30 @@ Links that cannot be fetched automatically will be flagged in the review for man
 
 The `[review-feature]` comment includes content from the Jira ticket and linked spec documents (requirements, descriptions, analysis). This comment will be visible to anyone with access to the PR. Ensure that your repository's visibility settings are appropriate for the sensitivity of your Jira and spec doc content.
 
+## Development
+
+Requires Python 3.12+. Uses [uv](https://docs.astral.sh/uv/) for package management.
+
+```bash
+# Install dependencies (including dev tools)
+uv sync --extra dev
+
+# Run tests
+uv run pytest -v
+
+# Run tests with coverage
+uv run pytest --cov=src --cov-report=term-missing
+
+# Lint and format check
+uv run ruff check src/ tests/
+uv run ruff format --check src/ tests/
+
+# Set up pre-commit hooks
+uv run pre-commit install
+```
+
+CI enforces lint, format, and a 60% test coverage threshold on every PR.
+
 ## Performance Optimization
 
 The action builds semantic indexes stored in `.doc-index/`:

@@ -60,7 +60,9 @@ def get_max_context_chars():
         try:
             value = int(raw)
         except ValueError:
-            print(f"Warning: Invalid MAX_CONTEXT_CHARS='{raw}', using default {_DEFAULT_MAX_CONTEXT_CHARS:,}")
+            print(
+                f"Warning: Invalid MAX_CONTEXT_CHARS='{raw}', using default {_DEFAULT_MAX_CONTEXT_CHARS:,}"
+            )
             return _DEFAULT_MAX_CONTEXT_CHARS
         return value
     return _DEFAULT_MAX_CONTEXT_CHARS
@@ -93,12 +95,14 @@ def truncate_diff(diff_text, max_chars, label="diff"):
 
     # Guard against negative or zero budget
     if max_chars <= 0:
-        print(f"Warning: No budget remaining for {label}, skipping diff entirely. "
-              f"Consider increasing MAX_CONTEXT_CHARS or reducing PR size.")
-        return f"[... diff omitted: prompt content already exceeds context budget ...]"
+        print(
+            f"Warning: No budget remaining for {label}, skipping diff entirely. "
+            f"Consider increasing MAX_CONTEXT_CHARS or reducing PR size."
+        )
+        return "[... diff omitted: prompt content already exceeds context budget ...]"
 
     # Split into per-file sections
-    parts = re.split(r'(?=\ndiff --git )', diff_text)
+    parts = re.split(r"(?=\ndiff --git )", diff_text)
 
     total_files = sum(1 for p in parts if "diff --git " in p)
 
@@ -120,14 +124,18 @@ def truncate_diff(diff_text, max_chars, label="diff"):
     if included == 0:
         # Even one file-diff is too large — fall back to character cut
         suffix = f"\n\n[... truncated: showing 0/{total_files} complete files, kept {max_chars:,} of {len(diff_text):,} chars ...]"
-        result = diff_text[:max_chars - len(suffix)]
+        result = diff_text[: max_chars - len(suffix)]
         pct = (max_chars) * 100 // len(diff_text)
-        print(f"Warning: Truncated {label} from {len(diff_text):,} to {max_chars:,} chars ({pct}% retained, 0/{total_files} complete files)")
+        print(
+            f"Warning: Truncated {label} from {len(diff_text):,} to {max_chars:,} chars ({pct}% retained, 0/{total_files} complete files)"
+        )
         return result + suffix
 
     suffix = f"\n\n[... truncated: showing {included}/{total_files} changed files, kept {len(result):,} of {len(diff_text):,} chars ...]"
     pct = len(result) * 100 // len(diff_text)
-    print(f"Warning: Truncated {label} from {len(diff_text):,} to ~{len(result):,} chars ({pct}% retained, {included}/{total_files} files)")
+    print(
+        f"Warning: Truncated {label} from {len(diff_text):,} to ~{len(result):,} chars ({pct}% retained, {included}/{total_files} files)"
+    )
     return result + suffix
 
 
@@ -149,7 +157,9 @@ def load_style_config(config_path=None):
 
     if config_path:
         if not validate_file_path(config_path):
-            print(f"Warning: Style config path rejected by security check: '{config_path}', skipping")
+            print(
+                f"Warning: Style config path rejected by security check: '{config_path}', skipping"
+            )
             return ""
         if not config_path.endswith(_ALLOWED_STYLE_EXTENSIONS):
             print(f"Warning: Style config must be a .md file, got '{config_path}', skipping")
@@ -174,7 +184,9 @@ def load_style_config(config_path=None):
     try:
         raw = config_file.read_text(encoding="utf-8").strip()
     except Exception as e:
-        print(f"Warning: Could not read style config '{config_path_str}': {sanitize_output(str(e))}")
+        print(
+            f"Warning: Could not read style config '{config_path_str}': {sanitize_output(str(e))}"
+        )
         return ""
 
     if not raw:
@@ -194,12 +206,15 @@ def check_context_error(e):
     """
     if isinstance(e, openai.BadRequestError):
         msg = str(e).lower()
-        if any(kw in msg for kw in [
-            "context length",
-            "maximum context",
-            "number of tokens",
-            "token limit",
-        ]):
+        if any(
+            kw in msg
+            for kw in [
+                "context length",
+                "maximum context",
+                "number of tokens",
+                "token limit",
+            ]
+        ):
             print(
                 "Error: Prompt exceeded model context window. "
                 "Set MAX_CONTEXT_CHARS to a lower value "

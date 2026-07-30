@@ -15,39 +15,73 @@ All business logic lives in dedicated modules:
 - security_utils.py: credential sanitization and path validation
 """
 
-import os
-import subprocess
 import argparse
 import difflib
+import os
 from pathlib import Path
 
-from config import get_client, get_model_name, get_branch_name, get_max_context_chars, load_style_config
-from github_ops import get_diff, get_commit_info, setup_docs_environment, push_and_open_pr
-from discovery import find_relevant_files_optimized, ask_ai_for_relevant_files, get_file_content_or_summaries
-from generation import generate_updates_parallel, load_full_content, ask_ai_for_updated_content, overwrite_file
 from comments import (
-    parse_update_instructions,
     parse_previous_review,
+    parse_update_instructions,
     post_review_comment,
 )
-from security_utils import sanitize_output, run_command_safe
-from jira_integration import (
-    parse_feature_command,
-    fetch_jira_context_sync,
-    analyze_feature_coverage,
-    format_feature_review_section,
+from config import (
+    get_client,
+    get_max_context_chars,
+    get_model_name,
+    load_style_config,
+)
+from discovery import (
+    ask_ai_for_relevant_files,
+    find_relevant_files_optimized,
+    get_file_content_or_summaries,
 )
 from doc_index import build_all_indexes
+from generation import (
+    ask_ai_for_updated_content,
+    generate_updates_parallel,
+    load_full_content,
+    overwrite_file,
+)
+from github_ops import get_commit_info, get_diff, push_and_open_pr, setup_docs_environment
+from jira_integration import (
+    analyze_feature_coverage,
+    fetch_jira_context_sync,
+    format_feature_review_section,
+    parse_feature_command,
+)
+from security_utils import run_command_safe
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true", help="Simulate changes without writing files or pushing PR")
-    parser.add_argument("--use-index", action="store_true", default=True, help="Use semantic indexes for faster file discovery (default: True)")
-    parser.add_argument("--no-index", action="store_true", help="Disable index-based optimization, use full scan")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate changes without writing files or pushing PR",
+    )
+    parser.add_argument(
+        "--use-index",
+        action="store_true",
+        default=True,
+        help="Use semantic indexes for faster file discovery (default: True)",
+    )
+    parser.add_argument(
+        "--no-index", action="store_true", help="Disable index-based optimization, use full scan"
+    )
     parser.add_argument("--build-index", action="store_true", help="Build/rebuild indexes and exit")
-    parser.add_argument("--parallel-updates", action="store_true", default=True, help="Generate updates in parallel (default: True)")
-    parser.add_argument("--max-workers", type=int, default=5, help="Max parallel workers for update generation (default: 5)")
+    parser.add_argument(
+        "--parallel-updates",
+        action="store_true",
+        default=True,
+        help="Generate updates in parallel (default: True)",
+    )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=5,
+        help="Max parallel workers for update generation (default: 5)",
+    )
     args = parser.parse_args()
 
     # Log context budget once at startup
@@ -144,7 +178,9 @@ def main():
     # Determine if we should use indexes
     use_index = args.use_index and not args.no_index
 
-    print(f"Mode: {'Review' if review_mode and not update_mode else 'Update' if update_mode and not review_mode else 'Review + Update'}")
+    print(
+        f"Mode: {'Review' if review_mode and not update_mode else 'Update' if update_mode and not review_mode else 'Review + Update'}"
+    )
     print(f"Optimization: {'Index-based' if use_index else 'Full scan'}")
 
     diff = get_diff()
@@ -157,11 +193,13 @@ def main():
     # If the diff alone takes 90%+ of the budget, there's not enough room.
     diff_ratio = len(diff) / budget
     if diff_ratio > 0.9:
-        print(f"Error: Diff is too large ({len(diff):,} chars) for the context budget ({budget:,} chars). "
-              f"The diff uses {diff_ratio:.0%} of the budget, leaving insufficient room for documentation content.")
-        print(f"Options:")
+        print(
+            f"Error: Diff is too large ({len(diff):,} chars) for the context budget ({budget:,} chars). "
+            f"The diff uses {diff_ratio:.0%} of the budget, leaving insufficient room for documentation content."
+        )
+        print("Options:")
         print(f"  - Increase MAX_CONTEXT_CHARS (current: {budget:,})")
-        print(f"  - Split the PR into smaller changes")
+        print("  - Split the PR into smaller changes")
         return
 
     # Get commit info before switching to docs repo
@@ -195,7 +233,10 @@ def main():
 
             print("Running feature coverage analysis...")
             analysis = analyze_feature_coverage(
-                diff, jira_context, get_client(), get_model_name(),
+                diff,
+                jira_context,
+                get_client(),
+                get_model_name(),
                 user_instructions=feature_instructions or "",
             )
             feature_section = format_feature_review_section(
@@ -226,7 +267,13 @@ def main():
 
             if not previous_review["accepted_files"]:
                 print("All files were unchecked in the review. No updates to apply.")
-                post_review_comment([], pr_number, commit_info, include_full_content=False, feature_section=feature_section)
+                post_review_comment(
+                    [],
+                    pr_number,
+                    commit_info,
+                    include_full_content=False,
+                    feature_section=feature_section,
+                )
                 return
 
     if not setup_docs_environment():
@@ -236,9 +283,13 @@ def main():
     # === FILE DISCOVERY ===
     if previous_review and previous_review["review_found"] and previous_review["accepted_files"]:
         relevant_files = previous_review["accepted_files"]
-        print(f"Using {len(relevant_files)} file(s) accepted from previous review: {relevant_files}")
+        print(
+            f"Using {len(relevant_files)} file(s) accepted from previous review: {relevant_files}"
+        )
         if previous_review["rejected_files"]:
-            print(f"Skipping {len(previous_review['rejected_files'])} rejected file(s): {previous_review['rejected_files']}")
+            print(
+                f"Skipping {len(previous_review['rejected_files'])} rejected file(s): {previous_review['rejected_files']}"
+            )
     else:
         if use_index:
             print("Using optimized index-based file discovery...")
@@ -261,7 +312,13 @@ def main():
     if not relevant_files:
         print("AI did not suggest any files.")
         if review_mode or update_mode or feature_mode:
-            post_review_comment([], pr_number, commit_info, include_full_content=False, feature_section=feature_section)
+            post_review_comment(
+                [],
+                pr_number,
+                commit_info,
+                include_full_content=False,
+                feature_section=feature_section,
+            )
         return
 
     print("Files selected for processing:", relevant_files)
@@ -273,12 +330,15 @@ def main():
     if args.parallel_updates and len(relevant_files) > 1:
         print(f"Generating updates in parallel (max {args.max_workers} workers)...")
         files_with_content = generate_updates_parallel(
-            diff, relevant_files, max_workers=args.max_workers,
-            user_instructions=user_instructions, file_instructions=file_instructions,
+            diff,
+            relevant_files,
+            max_workers=args.max_workers,
+            user_instructions=user_instructions,
+            file_instructions=file_instructions,
             style_guidelines=style_guidelines,
         )
 
-        for file_path, current, updated in files_with_content:
+        for file_path, _current, updated in files_with_content:
             if update_mode and not args.dry_run:
                 print(f"Updating {file_path}...")
                 if overwrite_file(file_path, updated):
@@ -293,8 +353,11 @@ def main():
 
             print(f"Checking if {file_path} needs an update...")
             updated = ask_ai_for_updated_content(
-                diff, file_path, current,
-                user_instructions=user_instructions, file_instructions=file_instructions,
+                diff,
+                file_path,
+                current,
+                user_instructions=user_instructions,
+                file_instructions=file_instructions,
                 style_guidelines=style_guidelines,
             )
 
@@ -315,7 +378,13 @@ def main():
     if files_with_content:
         if (review_mode or feature_mode) and not args.dry_run:
             print(f"Posting review comment on PR #{pr_number}...")
-            post_review_comment(files_with_content, pr_number, commit_info, include_full_content=False, feature_section=feature_section)
+            post_review_comment(
+                files_with_content,
+                pr_number,
+                commit_info,
+                include_full_content=False,
+                feature_section=feature_section,
+            )
 
         if update_mode and modified_files:
             if args.dry_run:
@@ -327,21 +396,28 @@ def main():
                 if docs_subfolder:
                     print("Same-repo scenario: committing docs to code PR branch...")
                     os.chdir("..")
-                    docs_files = [f"{docs_subfolder}/{f}" if not f.startswith(docs_subfolder) else f for f in modified_files]
+                    docs_files = [
+                        f"{docs_subfolder}/{f}" if not f.startswith(docs_subfolder) else f
+                        for f in modified_files
+                    ]
 
                     pr_head_ref = os.environ.get("PR_HEAD_SHA", "")
                     commit_msg = "docs: update documentation based on code changes"
                     if commit_info:
-                        commit_msg += f"\n\nAssisted-by: code-to-docs AI"
+                        commit_msg += "\n\nAssisted-by: code-to-docs AI"
 
                     run_command_safe(["git", "add"] + docs_files, check=True)
                     run_command_safe(["git", "commit", "-m", commit_msg], check=True)
 
                     gh_token = os.environ.get("GH_TOKEN")
                     if not gh_token:
-                        print("Warning: GH_TOKEN not set, doc updates committed locally but not pushed")
+                        print(
+                            "Warning: GH_TOKEN not set, doc updates committed locally but not pushed"
+                        )
                     elif not pr_head_ref:
-                        print("Warning: PR_HEAD_SHA not set, cannot determine target branch for push")
+                        print(
+                            "Warning: PR_HEAD_SHA not set, cannot determine target branch for push"
+                        )
                     else:
                         run_command_safe(
                             ["git", "push", "origin", f"HEAD:{pr_head_ref}"],
@@ -359,7 +435,9 @@ def main():
                 confirm_parts.append("")
                 if modified_files:
                     if previous_review and previous_review["review_found"]:
-                        confirm_parts.append(f"Updated **{len(modified_files)} file(s)** based on your review selections:")
+                        confirm_parts.append(
+                            f"Updated **{len(modified_files)} file(s)** based on your review selections:"
+                        )
                     else:
                         confirm_parts.append(f"Updated **{len(modified_files)} file(s)**:")
                     confirm_parts.append("")
@@ -367,7 +445,9 @@ def main():
                         confirm_parts.append(f"- ✅ `{f}`")
                 if previous_review and previous_review.get("rejected_files"):
                     confirm_parts.append("")
-                    confirm_parts.append(f"Skipped **{len(previous_review['rejected_files'])} file(s)** (unchecked):")
+                    confirm_parts.append(
+                        f"Skipped **{len(previous_review['rejected_files'])} file(s)** (unchecked):"
+                    )
                     confirm_parts.append("")
                     for f in previous_review["rejected_files"]:
                         confirm_parts.append(f"- ⏭️ `{f}`")
@@ -382,13 +462,15 @@ def main():
                             confirm_parts.append("<details>")
                             confirm_parts.append("<summary><b>View diff</b></summary>")
                             confirm_parts.append("")
-                            diff_lines = list(difflib.unified_diff(
-                                original.splitlines(keepends=True),
-                                updated.splitlines(keepends=True),
-                                fromfile=f"a/{file_path}",
-                                tofile=f"b/{file_path}",
-                                n=3,
-                            ))
+                            diff_lines = list(
+                                difflib.unified_diff(
+                                    original.splitlines(keepends=True),
+                                    updated.splitlines(keepends=True),
+                                    fromfile=f"a/{file_path}",
+                                    tofile=f"b/{file_path}",
+                                    n=3,
+                                )
+                            )
                             if diff_lines:
                                 confirm_parts.append("```diff")
                                 confirm_parts.append("".join(diff_lines))
@@ -400,7 +482,9 @@ def main():
                     if docs_subfolder:
                         confirm_parts.append("Doc updates have been committed to this PR.")
                     else:
-                        confirm_parts.append("A docs PR has been created/updated with these changes.")
+                        confirm_parts.append(
+                            "A docs PR has been created/updated with these changes."
+                        )
                 confirm_body = "\n".join(confirm_parts)
                 confirm_file = Path("/tmp/update_confirm.md")
                 confirm_file.write_text(confirm_body, encoding="utf-8")
@@ -417,9 +501,16 @@ def main():
     else:
         if (review_mode or update_mode or feature_mode) and not args.dry_run:
             print("Posting comment that no updates are needed...")
-            post_review_comment([], pr_number, commit_info, include_full_content=False, feature_section=feature_section)
+            post_review_comment(
+                [],
+                pr_number,
+                commit_info,
+                include_full_content=False,
+                feature_section=feature_section,
+            )
         else:
             print("All documentation is already up to date — no PR created.")
+
 
 if __name__ == "__main__":
     main()
