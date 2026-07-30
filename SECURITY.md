@@ -2,20 +2,20 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in this project, please report it responsibly.
+If you find a potential security vulnerability in this project, please report it responsibly.
 
-**Do not open a public issue.** Instead, contact the maintainers directly:
+### Use the GitHub Security Tab
 
-- Email: csoceanu@redhat.com
-- Or open a private security advisory via GitHub: **Security** tab > **Report a vulnerability**
+This repository is set up to allow vulnerability reports through GitHub's Security Advisories feature. To report a vulnerability:
 
-## What to include
+1. Navigate to the repository's main page.
+2. Select the [**Security**](https://github.com/redhat-community-ai-tools/code-to-docs/security) tab.
+3. Select **Advisories** from the left-hand sidebar.
+4. Click on **Report a vulnerability**.
+5. Fill in the required details and submit the report.
 
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Suggested fix (if any)
+Following this process will create a private advisory for our maintainers to review.
 
-## Response timeline
+### Do Not Open Public Pull Requests, Issues, or Discussions
 
-We aim to acknowledge reports within 48 hours and provide a fix or mitigation plan within 7 days.
+Please **do not** discuss the issue, create PRs, or start discussions about the vulnerability. This ensures the vulnerability is not widely exploited before a fix is provided.
