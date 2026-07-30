@@ -107,7 +107,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Run the documentation enhancer
-if python /app/suggest_docs.py $ARGS; then
+if python /app/src/suggest_docs.py $ARGS; then
   echo "✅ Documentation enhancer completed successfully"
 
   # Set GitHub Actions outputs (if result data is available)
