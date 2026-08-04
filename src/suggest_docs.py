@@ -18,6 +18,8 @@ All business logic lives in dedicated modules:
 import argparse
 import difflib
 import os
+import re
+import subprocess
 from pathlib import Path
 
 from comments import (
@@ -50,7 +52,62 @@ from jira_integration import (
     format_feature_review_section,
     parse_feature_command,
 )
-from security_utils import run_command_safe
+from security_utils import run_command_safe, setup_git_credentials
+
+_GITHUB_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
+def _normalize_github_url(url):
+    """Normalize a GitHub URL to https://github.com/owner/repo for comparison."""
+    url = url.strip().rstrip("/")
+    if url.endswith(".git"):
+        url = url[:-4]
+    if url.startswith("ssh://git@github.com/"):
+        url = "https://github.com/" + url[len("ssh://git@github.com/") :]
+    elif url.startswith("git@github.com:"):
+        url = "https://github.com/" + url[len("git@github.com:") :]
+    return url
+
+
+def _resolve_pr_push_target(pr_number):
+    """Resolve the branch name and repo clone URL for pushing to a PR.
+
+    Returns (branch_name, clone_url) or (None, None) on failure.
+    For same-repo PRs, clone_url matches the current origin.
+    For fork PRs, clone_url points to the fork.
+    """
+    if not pr_number or pr_number == "unknown":
+        return None, None
+    gh_token = os.environ.get("GH_TOKEN")
+    if not gh_token:
+        return None, None
+    result = run_command_safe(
+        [
+            "gh",
+            "pr",
+            "view",
+            str(pr_number),
+            "--json",
+            "headRefName,headRepository,headRepositoryOwner",
+            "--jq",
+            "[.headRefName, .headRepositoryOwner.login, .headRepository.name] | @tsv",
+        ],
+        check=False,
+        env={**os.environ, "GH_TOKEN": gh_token},
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None, None
+    parts = result.stdout.strip().split("\t")
+    if len(parts) != 3:
+        return None, None
+    branch, owner, repo = parts
+    if not branch or not owner or not repo or "null" in (branch, owner, repo):
+        return None, None
+    if not _GITHUB_NAME_RE.match(owner) or not _GITHUB_NAME_RE.match(repo):
+        print(f"Warning: Invalid owner/repo from PR metadata: {owner}/{repo}")
+        return None, None
+    clone_url = f"https://github.com/{owner}/{repo}.git"
+    return branch, clone_url
 
 
 def main():
@@ -403,7 +460,7 @@ def main():
                         for f in modified_files
                     ]
 
-                    pr_head_ref = os.environ.get("PR_HEAD_SHA", "")
+                    pr_branch, pr_repo_url = _resolve_pr_push_target(pr_number)
                     commit_msg = "docs: update documentation based on code changes"
                     if commit_info:
                         commit_msg += "\n\nAssisted-by: code-to-docs AI"
@@ -416,16 +473,61 @@ def main():
                         print(
                             "Warning: GH_TOKEN not set, doc updates committed locally but not pushed"
                         )
-                    elif not pr_head_ref:
-                        print(
-                            "Warning: PR_HEAD_SHA not set, cannot determine target branch for push"
-                        )
+                    elif not pr_branch:
+                        print("Warning: Could not resolve PR branch name, cannot push")
                     else:
-                        run_command_safe(
-                            ["git", "push", "origin", f"HEAD:{pr_head_ref}"],
-                            check=True,
+                        origin_url = run_command_safe(
+                            ["git", "config", "--get", "remote.origin.url"], check=False
                         )
-                        print(f"✅ Pushed doc updates to PR branch ({pr_head_ref})")
+                        current_origin = (
+                            origin_url.stdout.strip() if origin_url.returncode == 0 else ""
+                        )
+
+                        is_fork = (
+                            pr_repo_url
+                            and current_origin
+                            and _normalize_github_url(pr_repo_url)
+                            != _normalize_github_url(current_origin)
+                        )
+
+                        try:
+                            if is_fork:
+                                if not setup_git_credentials(gh_token, pr_repo_url):
+                                    print(
+                                        "Warning: Failed to configure credentials for fork, cannot push"
+                                    )
+                                else:
+                                    run_command_safe(
+                                        ["git", "remote", "set-url", "origin", pr_repo_url],
+                                        check=True,
+                                    )
+                                    try:
+                                        run_command_safe(
+                                            [
+                                                "git",
+                                                "push",
+                                                "origin",
+                                                f"HEAD:refs/heads/{pr_branch}",
+                                            ],
+                                            check=True,
+                                        )
+                                        print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
+                                    finally:
+                                        run_command_safe(
+                                            ["git", "remote", "set-url", "origin", current_origin],
+                                            check=False,
+                                        )
+                            else:
+                                run_command_safe(
+                                    ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
+                                    check=True,
+                                )
+                                print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
+                        except subprocess.CalledProcessError as e:
+                            print(
+                                f"Warning: Failed to push doc updates: {e}. "
+                                "Check that GH_PAT has repo scope and the PR allows maintainer pushes."
+                            )
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
