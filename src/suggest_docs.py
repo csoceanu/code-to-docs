@@ -141,9 +141,18 @@ def _push_docs_pr_for_merged(pr_number, docs_files, gh_token):
         existing_pr = check_pr.stdout.strip() if check_pr.returncode == 0 else "[]"
         if existing_pr and existing_pr != "[]":
             try:
-                url = json.loads(existing_pr)[0].get("url", "")
+                pr_data = json.loads(existing_pr)[0]
+                url = pr_data.get("url", "")
+                pr_num = pr_data.get("number")
             except (ValueError, IndexError, KeyError):
                 url = ""
+                pr_num = None
+            if pr_num:
+                run_command_safe(
+                    ["gh", "pr", "edit", str(pr_num), "--body", pr_body],
+                    check=False,
+                    env={**os.environ, "GH_TOKEN": gh_token},
+                )
             print(f"✅ Updated existing docs PR (branch {docs_branch})")
             return url
 

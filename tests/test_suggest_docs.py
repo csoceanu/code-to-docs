@@ -6,7 +6,12 @@ from unittest.mock import MagicMock, patch
 # Stub openai before any script imports config
 sys.modules.setdefault("openai", MagicMock())
 
-from suggest_docs import _normalize_github_url, _resolve_pr_push_target, main
+from suggest_docs import (
+    _normalize_github_url,
+    _push_docs_pr_for_merged,
+    _resolve_pr_push_target,
+    main,
+)
 
 # ── _normalize_github_url ────────────────────────────────────────────────────
 
@@ -116,6 +121,79 @@ class TestResolvePrPushTarget:
             branch, _, merged = _resolve_pr_push_target("42")
         assert branch == "feature/deep/nested/branch"
         assert merged is False
+
+
+# ── _push_docs_pr_for_merged ─────────────────────────────────────────────────
+
+
+class TestPushDocsPrForMerged:
+    def _mock_run(
+        self, push_ok=True, pr_list_stdout="[]", create_stdout="https://github.com/org/repo/pull/99"
+    ):
+        calls = []
+
+        def side_effect(cmd, **kwargs):
+            calls.append(cmd)
+            result = MagicMock(returncode=0, stdout="")
+            if "fetch" in cmd:
+                pass
+            elif "checkout" in cmd:
+                pass
+            elif "push" in cmd:
+                if not push_ok:
+                    import subprocess
+
+                    raise subprocess.CalledProcessError(1, cmd)
+            elif cmd[:3] == ["gh", "pr", "list"]:
+                result.stdout = pr_list_stdout
+            elif cmd[:3] == ["gh", "pr", "create"]:
+                result.stdout = create_stdout
+            elif cmd[:3] == ["gh", "pr", "edit"]:
+                pass
+            return result
+
+        return side_effect, calls
+
+    def test_creates_new_pr_returns_url(self):
+        side_effect, calls = self._mock_run()
+        with patch("suggest_docs.run_command_safe", side_effect=side_effect):
+            url = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+        assert url == "https://github.com/org/repo/pull/99"
+        assert any("pr" in str(c) and "create" in str(c) for c in calls)
+
+    def test_updates_existing_pr_returns_url(self):
+        pr_list = '[{"number": 55, "url": "https://github.com/org/repo/pull/55"}]'
+        side_effect, calls = self._mock_run(pr_list_stdout=pr_list)
+        with patch("suggest_docs.run_command_safe", side_effect=side_effect):
+            url = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+        assert url == "https://github.com/org/repo/pull/55"
+        assert any("edit" in str(c) for c in calls)
+
+    def test_push_failure_returns_none(self):
+        side_effect, _ = self._mock_run(push_ok=False)
+        with patch("suggest_docs.run_command_safe", side_effect=side_effect):
+            result = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+        assert result is None
+
+    def test_existing_pr_bad_json_returns_empty(self):
+        side_effect, _ = self._mock_run(pr_list_stdout="not-json")
+        with patch("suggest_docs.run_command_safe", side_effect=side_effect):
+            url = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+        assert url == ""
+
+    def test_create_empty_stdout_returns_empty(self):
+        side_effect, _ = self._mock_run(create_stdout="")
+        with patch("suggest_docs.run_command_safe", side_effect=side_effect):
+            url = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+        assert url == ""
+
+    def test_fetches_branch_before_push(self):
+        side_effect, calls = self._mock_run()
+        with patch("suggest_docs.run_command_safe", side_effect=side_effect):
+            _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+        fetch_idx = next(i for i, c in enumerate(calls) if "fetch" in str(c))
+        push_idx = next(i for i, c in enumerate(calls) if "push" in str(c))
+        assert fetch_idx < push_idx
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
