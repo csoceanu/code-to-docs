@@ -1048,13 +1048,20 @@ def checkout_docs_from_base_branch():
                 print("All base branch docs already present on PR branch")
                 return False
 
+            added = 0
             for file_path in missing:
-                run_command_safe(
+                result = run_command_safe(
                     ["git", "checkout", f"origin/{base_branch}", "--", file_path], check=False
                 )
+                if result.returncode == 0:
+                    added += 1
 
-            print(f"✅ Added {len(missing)} doc(s) from {base_branch} branch")
-            return True
+            if added:
+                print(f"✅ Added {added} doc(s) from {base_branch} branch")
+                return True
+            else:
+                print(f"Warning: Failed to checkout any of {len(missing)} missing doc(s)")
+                return False
 
     except Exception as e:
         print(f"Warning: Error adding docs from base branch: {sanitize_output(str(e))}")
