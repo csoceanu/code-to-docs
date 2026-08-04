@@ -18,6 +18,7 @@ All business logic lives in dedicated modules:
 import argparse
 import difflib
 import os
+import re
 from pathlib import Path
 
 from comments import (
@@ -96,6 +97,10 @@ def _resolve_pr_push_target(pr_number):
         return None, None
     branch, owner, repo = parts
     if not branch or not owner or not repo or "null" in (owner, repo):
+        return None, None
+    _GITHUB_NAME = re.compile(r"^[a-zA-Z0-9._-]+$")
+    if not _GITHUB_NAME.match(owner) or not _GITHUB_NAME.match(repo):
+        print(f"Warning: Invalid owner/repo from PR metadata: {owner}/{repo}")
         return None, None
     clone_url = f"https://github.com/{owner}/{repo}.git"
     return branch, clone_url
