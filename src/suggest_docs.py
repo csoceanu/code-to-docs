@@ -53,6 +53,23 @@ from jira_integration import (
 from security_utils import run_command_safe
 
 
+def _resolve_pr_branch(pr_number):
+    """Resolve the head branch name for a PR using the GitHub API."""
+    if not pr_number or pr_number == "unknown":
+        return None
+    gh_token = os.environ.get("GH_TOKEN")
+    if not gh_token:
+        return None
+    result = run_command_safe(
+        ["gh", "pr", "view", str(pr_number), "--json", "headRefName", "--jq", ".headRefName"],
+        check=False,
+        env={**os.environ, "GH_TOKEN": gh_token},
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -403,7 +420,7 @@ def main():
                         for f in modified_files
                     ]
 
-                    pr_head_ref = os.environ.get("PR_HEAD_SHA", "")
+                    pr_branch = _resolve_pr_branch(pr_number)
                     commit_msg = "docs: update documentation based on code changes"
                     if commit_info:
                         commit_msg += "\n\nAssisted-by: code-to-docs AI"
@@ -416,16 +433,14 @@ def main():
                         print(
                             "Warning: GH_TOKEN not set, doc updates committed locally but not pushed"
                         )
-                    elif not pr_head_ref:
-                        print(
-                            "Warning: PR_HEAD_SHA not set, cannot determine target branch for push"
-                        )
+                    elif not pr_branch:
+                        print("Warning: Could not resolve PR branch name, cannot push")
                     else:
                         run_command_safe(
-                            ["git", "push", "origin", f"HEAD:{pr_head_ref}"],
+                            ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
                             check=True,
                         )
-                        print(f"✅ Pushed doc updates to PR branch ({pr_head_ref})")
+                        print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
