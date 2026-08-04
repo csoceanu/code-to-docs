@@ -53,6 +53,16 @@ from jira_integration import (
 from security_utils import run_command_safe, setup_git_credentials
 
 
+def _normalize_github_url(url):
+    """Normalize a GitHub URL to https://github.com/owner/repo for comparison."""
+    url = url.strip().rstrip("/")
+    if url.endswith(".git"):
+        url = url[:-4]
+    if url.startswith("git@github.com:"):
+        url = "https://github.com/" + url[len("git@github.com:") :]
+    return url
+
+
 def _resolve_pr_push_target(pr_number):
     """Resolve the branch name and repo clone URL for pushing to a PR.
 
@@ -85,6 +95,8 @@ def _resolve_pr_push_target(pr_number):
     if len(parts) != 3:
         return None, None
     branch, owner, repo = parts
+    if not branch or not owner or not repo or "null" in (owner, repo):
+        return None, None
     clone_url = f"https://github.com/{owner}/{repo}.git"
     return branch, clone_url
 
@@ -462,7 +474,9 @@ def main():
                             origin_url.stdout.strip() if origin_url.returncode == 0 else ""
                         )
 
-                        if pr_repo_url and pr_repo_url != current_origin:
+                        if pr_repo_url and _normalize_github_url(
+                            pr_repo_url
+                        ) != _normalize_github_url(current_origin):
                             setup_git_credentials(gh_token, pr_repo_url)
                             run_command_safe(
                                 ["git", "remote", "set-url", "origin", pr_repo_url], check=True
