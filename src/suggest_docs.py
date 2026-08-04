@@ -50,24 +50,43 @@ from jira_integration import (
     format_feature_review_section,
     parse_feature_command,
 )
-from security_utils import run_command_safe
+from security_utils import run_command_safe, setup_git_credentials
 
 
-def _resolve_pr_branch(pr_number):
-    """Resolve the head branch name for a PR using the GitHub API."""
+def _resolve_pr_push_target(pr_number):
+    """Resolve the branch name and repo clone URL for pushing to a PR.
+
+    Returns (branch_name, clone_url) or (None, None) on failure.
+    For same-repo PRs, clone_url matches the current origin.
+    For fork PRs, clone_url points to the fork.
+    """
     if not pr_number or pr_number == "unknown":
-        return None
+        return None, None
     gh_token = os.environ.get("GH_TOKEN")
     if not gh_token:
-        return None
+        return None, None
     result = run_command_safe(
-        ["gh", "pr", "view", str(pr_number), "--json", "headRefName", "--jq", ".headRefName"],
+        [
+            "gh",
+            "pr",
+            "view",
+            str(pr_number),
+            "--json",
+            "headRefName,headRepository,headRepositoryOwner",
+            "--jq",
+            "[.headRefName, .headRepositoryOwner.login, .headRepository.name] | @tsv",
+        ],
         check=False,
         env={**os.environ, "GH_TOKEN": gh_token},
     )
-    if result.returncode == 0 and result.stdout.strip():
-        return result.stdout.strip()
-    return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None, None
+    parts = result.stdout.strip().split("\t")
+    if len(parts) != 3:
+        return None, None
+    branch, owner, repo = parts
+    clone_url = f"https://github.com/{owner}/{repo}.git"
+    return branch, clone_url
 
 
 def main():
@@ -420,7 +439,7 @@ def main():
                         for f in modified_files
                     ]
 
-                    pr_branch = _resolve_pr_branch(pr_number)
+                    pr_branch, pr_repo_url = _resolve_pr_push_target(pr_number)
                     commit_msg = "docs: update documentation based on code changes"
                     if commit_info:
                         commit_msg += "\n\nAssisted-by: code-to-docs AI"
@@ -436,6 +455,19 @@ def main():
                     elif not pr_branch:
                         print("Warning: Could not resolve PR branch name, cannot push")
                     else:
+                        origin_url = run_command_safe(
+                            ["git", "config", "--get", "remote.origin.url"], check=False
+                        )
+                        current_origin = (
+                            origin_url.stdout.strip() if origin_url.returncode == 0 else ""
+                        )
+
+                        if pr_repo_url and pr_repo_url != current_origin:
+                            setup_git_credentials(gh_token, pr_repo_url)
+                            run_command_safe(
+                                ["git", "remote", "set-url", "origin", pr_repo_url], check=True
+                            )
+
                         run_command_safe(
                             ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
                             check=True,
