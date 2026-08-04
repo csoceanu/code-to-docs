@@ -135,11 +135,7 @@ class TestPushDocsPrForMerged:
         def side_effect(cmd, **kwargs):
             calls.append(cmd)
             result = MagicMock(returncode=0, stdout="")
-            if "fetch" in cmd:
-                pass
-            elif "checkout" in cmd:
-                pass
-            elif "push" in cmd:
+            if "push" in cmd:
                 if not push_ok:
                     import subprocess
 
@@ -157,7 +153,9 @@ class TestPushDocsPrForMerged:
     def test_creates_new_pr_returns_url(self):
         side_effect, calls = self._mock_run()
         with patch("suggest_docs.run_command_safe", side_effect=side_effect):
-            url = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+            url = _push_docs_pr_for_merged(
+                "42", "docs/update-from-pr-42", ["docs/guide.md"], "token"
+            )
         assert url == "https://github.com/org/repo/pull/99"
         assert any("pr" in str(c) and "create" in str(c) for c in calls)
 
@@ -165,35 +163,35 @@ class TestPushDocsPrForMerged:
         pr_list = '[{"number": 55, "url": "https://github.com/org/repo/pull/55"}]'
         side_effect, calls = self._mock_run(pr_list_stdout=pr_list)
         with patch("suggest_docs.run_command_safe", side_effect=side_effect):
-            url = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+            url = _push_docs_pr_for_merged(
+                "42", "docs/update-from-pr-42", ["docs/guide.md"], "token"
+            )
         assert url == "https://github.com/org/repo/pull/55"
         assert any("edit" in str(c) for c in calls)
 
     def test_push_failure_returns_none(self):
         side_effect, _ = self._mock_run(push_ok=False)
         with patch("suggest_docs.run_command_safe", side_effect=side_effect):
-            result = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+            result = _push_docs_pr_for_merged(
+                "42", "docs/update-from-pr-42", ["docs/guide.md"], "token"
+            )
         assert result is None
 
     def test_existing_pr_bad_json_returns_none(self):
         side_effect, _ = self._mock_run(pr_list_stdout="not-json")
         with patch("suggest_docs.run_command_safe", side_effect=side_effect):
-            result = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+            result = _push_docs_pr_for_merged(
+                "42", "docs/update-from-pr-42", ["docs/guide.md"], "token"
+            )
         assert result is None
 
     def test_create_empty_stdout_returns_empty(self):
         side_effect, _ = self._mock_run(create_stdout="")
         with patch("suggest_docs.run_command_safe", side_effect=side_effect):
-            url = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+            url = _push_docs_pr_for_merged(
+                "42", "docs/update-from-pr-42", ["docs/guide.md"], "token"
+            )
         assert url == ""
-
-    def test_fetches_branch_before_push(self):
-        side_effect, calls = self._mock_run()
-        with patch("suggest_docs.run_command_safe", side_effect=side_effect):
-            _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
-        fetch_idx = next(i for i, c in enumerate(calls) if "fetch" in str(c))
-        push_idx = next(i for i, c in enumerate(calls) if "push" in str(c))
-        assert fetch_idx < push_idx
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -339,6 +337,116 @@ class TestMainUpdateMode:
         mock_gen.assert_called_once()
         args, kwargs = mock_gen.call_args
         assert args[1] == ["guide.rst", "ref.adoc"]
+
+
+# ── update mode (merged PR, same-repo) ──────────────────────────────────────
+
+
+class TestMainUpdateModeMergedPr:
+    @patch("suggest_docs.os.chdir")
+    @patch("suggest_docs.run_command_safe")
+    @patch(
+        "suggest_docs._push_docs_pr_for_merged",
+        return_value="https://github.com/org/repo/pull/99",
+    )
+    @patch("suggest_docs.overwrite_file", return_value=True)
+    @patch(
+        "suggest_docs.generate_updates_parallel",
+        return_value=[("guide.md", "old", "new"), ("api.md", "old2", "new2")],
+    )
+    @patch("suggest_docs.find_relevant_files_optimized", return_value=["guide.md", "api.md"])
+    @patch("suggest_docs.setup_docs_environment", return_value=True)
+    @patch(
+        "suggest_docs.parse_previous_review",
+        return_value={"review_found": False, "accepted_files": [], "rejected_files": []},
+    )
+    @patch("suggest_docs.parse_update_instructions", return_value=("", {}))
+    @patch("suggest_docs.get_commit_info", return_value=_mock_commit_info())
+    @patch("suggest_docs.get_diff", return_value="diff --git a/foo.py b/foo.py")
+    @patch(
+        "suggest_docs._resolve_pr_push_target",
+        return_value=("main-branch", "https://github.com/org/repo.git", True),
+    )
+    @patch("suggest_docs.checkout_docs_from_base_branch")
+    def test_merged_pr_creates_docs_pr(
+        self,
+        mock_checkout_base,
+        mock_resolve,
+        mock_diff,
+        mock_ci,
+        mock_parse_instr,
+        mock_parse_rev,
+        mock_setup,
+        mock_find,
+        mock_gen,
+        mock_overwrite,
+        mock_push_merged,
+        mock_cmd,
+        mock_chdir,
+        monkeypatch,
+    ):
+        monkeypatch.setenv("COMMENT_BODY", "[update-docs]")
+        monkeypatch.setenv("PR_NUMBER", "42")
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.setenv("GH_TOKEN", "test-token")
+        monkeypatch.setattr("sys.argv", ["suggest_docs.py"])
+
+        main()
+
+        mock_push_merged.assert_called_once()
+        args = mock_push_merged.call_args.args
+        assert args[0] == "42"
+        assert args[1] == "docs/update-from-pr-42"
+        mock_checkout_base.assert_not_called()
+
+    @patch("suggest_docs.os.chdir")
+    @patch("suggest_docs.run_command_safe")
+    @patch("suggest_docs.checkout_docs_from_base_branch")
+    @patch("suggest_docs.find_relevant_files_optimized", return_value=[])
+    @patch("suggest_docs.setup_docs_environment", return_value=True)
+    @patch(
+        "suggest_docs.parse_previous_review",
+        return_value={"review_found": False, "accepted_files": [], "rejected_files": []},
+    )
+    @patch("suggest_docs.parse_update_instructions", return_value=("", {}))
+    @patch("suggest_docs.get_commit_info", return_value=_mock_commit_info())
+    @patch("suggest_docs.get_diff", return_value="diff --git a/foo.py b/foo.py")
+    def test_branch_switch_failure_falls_back(
+        self,
+        mock_diff,
+        mock_ci,
+        mock_parse_instr,
+        mock_parse_rev,
+        mock_setup,
+        mock_find,
+        mock_checkout_base,
+        mock_cmd,
+        mock_chdir,
+        monkeypatch,
+    ):
+        import subprocess as _subprocess
+
+        monkeypatch.setenv("COMMENT_BODY", "[update-docs]")
+        monkeypatch.setenv("PR_NUMBER", "42")
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.setenv("GH_TOKEN", "test-token")
+        monkeypatch.setattr("sys.argv", ["suggest_docs.py"])
+
+        def resolve_merged(*args, **kwargs):
+            return ("branch", "https://github.com/org/repo.git", True)
+
+        monkeypatch.setattr("suggest_docs._resolve_pr_push_target", resolve_merged)
+
+        def cmd_side_effect(cmd, **kwargs):
+            if "checkout" in cmd:
+                raise _subprocess.CalledProcessError(1, cmd)
+            return MagicMock(returncode=0, stdout="")
+
+        mock_cmd.side_effect = cmd_side_effect
+
+        main()
+
+        mock_checkout_base.assert_called_once()
 
 
 # ── feature mode ─────────────────────────────────────────────────────────────

@@ -300,7 +300,7 @@ FORMATTING REQUIREMENTS:
 """
 
     prompt_template = f"""
-You are updating documentation based on a code diff. Be EXTREMELY conservative.
+You are updating documentation based on a code diff. Be conservative but thorough.
 
 {format_instructions}
 - Ensure consistent indentation and spacing
@@ -326,6 +326,11 @@ DECISION LOGIC:
    - If YES → return `NO_UPDATE_NEEDED`
    - If NO → add ONLY that specific change
 
+IMPORTANT: A removed limitation IS a new capability.
+If the diff removes an error, rejection, or "not supported" message,
+the feature that was blocked is now available. Document the new
+capability, not just any constraints around it.
+
 WHAT YOU CAN ADD:
 - Only content that directly reflects what was added/changed in the diff
 
@@ -335,8 +340,8 @@ WHAT YOU MUST NOT ADD:
 - Restructured or rewritten content
 
 Return ONLY:
-- `NO_UPDATE_NEEDED` (strongly preferred if changes aren't essential), OR
-- The complete updated file with ONLY the minimal necessary changes
+- `NO_UPDATE_NEEDED` if the diff does not affect what this file documents, OR
+- The complete updated file with the necessary changes
 """
 
     # Inject persistent style guidelines (lowest priority — before user instructions)
