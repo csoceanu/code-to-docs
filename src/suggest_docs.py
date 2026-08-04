@@ -111,18 +111,17 @@ def _resolve_pr_push_target(pr_number):
     return branch, clone_url, state == "MERGED"
 
 
-def _push_docs_pr_for_merged(pr_number, docs_files, gh_token):
-    """Create a docs PR for a merged source PR.
+def _push_docs_pr_for_merged(pr_number, docs_branch, docs_files, gh_token):
+    """Push the docs branch and create/update a PR for a merged source PR.
+
+    The caller is responsible for switching to the docs branch and
+    committing the changes before calling this function.
 
     Returns the docs PR URL on success (empty string if URL could not
     be extracted), or None on failure.
     """
     base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
-    docs_branch = f"docs/update-from-pr-{pr_number}"
-    print(f"PR is merged — creating docs PR against {base_branch}...")
     try:
-        run_command_safe(["git", "fetch", "origin", docs_branch], check=False)
-        run_command_safe(["git", "checkout", "-B", docs_branch], check=True)
         run_command_safe(
             ["git", "push", "--set-upstream", "origin", docs_branch, "--force-with-lease"],
             check=True,
@@ -408,7 +407,40 @@ def main():
         print("Failed to set up docs environment")
         return
 
-    checkout_docs_from_base_branch()
+    # For merged PRs in same-repo mode, switch to a clean branch from main
+    # BEFORE discovery/generation so the pipeline runs against main's docs
+    # and file writes land on the correct branch.
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
+    pr_merged = False
+    docs_pr_url = None
+    docs_pr_failed = False
+    docs_branch = None
+    pr_branch_info = None
+    if update_mode and docs_subfolder:
+        pr_branch_info = _resolve_pr_push_target(pr_number)
+        _, _, pr_merged = pr_branch_info
+        if pr_merged:
+            base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+            docs_branch = f"docs/update-from-pr-{pr_number}"
+            try:
+                os.chdir("..")
+                run_command_safe(["git", "fetch", "origin", base_branch], check=False)
+                run_command_safe(["git", "fetch", "origin", docs_branch], check=False)
+                run_command_safe(
+                    ["git", "checkout", "-B", docs_branch, f"origin/{base_branch}"], check=True
+                )
+                os.chdir(docs_subfolder)
+                print(f"Switched to {docs_branch} (based on {base_branch}) for merged PR")
+            except (subprocess.CalledProcessError, OSError) as e:
+                print(f"Warning: Failed to create docs branch from {base_branch}: {e}")
+                pr_merged = False
+                try:
+                    os.chdir(docs_subfolder)
+                except OSError:
+                    pass
+
+    if not pr_merged:
+        checkout_docs_from_base_branch()
 
     # === FILE DISCOVERY ===
     if previous_review and previous_review["review_found"] and previous_review["accepted_files"]:
@@ -522,18 +554,14 @@ def main():
                 for f in modified_files:
                     print(f"- {f}")
             else:
-                docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
                 if docs_subfolder:
-                    print("Same-repo scenario: committing docs to code PR branch...")
+                    print("Same-repo scenario: committing docs...")
                     os.chdir("..")
                     docs_files = [
                         f"{docs_subfolder}/{f}" if not f.startswith(docs_subfolder) else f
                         for f in modified_files
                     ]
 
-                    pr_branch, pr_repo_url, pr_merged = _resolve_pr_push_target(pr_number)
-                    docs_pr_url = None
-                    docs_pr_failed = False
                     commit_msg = "docs: update documentation based on code changes"
                     if commit_info:
                         commit_msg += "\n\nAssisted-by: code-to-docs AI"
@@ -546,65 +574,84 @@ def main():
                         print(
                             "Warning: GH_TOKEN not set, doc updates committed locally but not pushed"
                         )
-                    elif not pr_branch:
-                        print("Warning: Could not resolve PR branch name, cannot push")
                     elif pr_merged:
-                        docs_pr_url = _push_docs_pr_for_merged(pr_number, docs_files, gh_token)
+                        docs_pr_url = _push_docs_pr_for_merged(
+                            pr_number, docs_branch, docs_files, gh_token
+                        )
                         if docs_pr_url is None:
                             docs_pr_failed = True
                     else:
-                        origin_url = run_command_safe(
-                            ["git", "config", "--get", "remote.origin.url"], check=False
+                        pr_branch, pr_repo_url, _ = pr_branch_info or _resolve_pr_push_target(
+                            pr_number
                         )
-                        current_origin = (
-                            origin_url.stdout.strip() if origin_url.returncode == 0 else ""
-                        )
+                        if not pr_branch:
+                            print("Warning: Could not resolve PR branch name, cannot push")
+                        else:
+                            origin_url = run_command_safe(
+                                ["git", "config", "--get", "remote.origin.url"], check=False
+                            )
+                            current_origin = (
+                                origin_url.stdout.strip() if origin_url.returncode == 0 else ""
+                            )
 
-                        is_fork = (
-                            pr_repo_url
-                            and current_origin
-                            and _normalize_github_url(pr_repo_url)
-                            != _normalize_github_url(current_origin)
-                        )
+                            is_fork = (
+                                pr_repo_url
+                                and current_origin
+                                and _normalize_github_url(pr_repo_url)
+                                != _normalize_github_url(current_origin)
+                            )
 
-                        try:
-                            if is_fork:
-                                if not setup_git_credentials(gh_token, pr_repo_url):
-                                    print(
-                                        "Warning: Failed to configure credentials for fork, cannot push"
-                                    )
-                                else:
-                                    run_command_safe(
-                                        ["git", "remote", "set-url", "origin", pr_repo_url],
-                                        check=True,
-                                    )
-                                    try:
+                            try:
+                                if is_fork:
+                                    if not setup_git_credentials(gh_token, pr_repo_url):
+                                        print(
+                                            "Warning: Failed to configure credentials for fork, cannot push"
+                                        )
+                                    else:
                                         run_command_safe(
-                                            [
-                                                "git",
-                                                "push",
-                                                "origin",
-                                                f"HEAD:refs/heads/{pr_branch}",
-                                            ],
+                                            ["git", "remote", "set-url", "origin", pr_repo_url],
                                             check=True,
                                         )
-                                        print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
-                                    finally:
-                                        run_command_safe(
-                                            ["git", "remote", "set-url", "origin", current_origin],
-                                            check=False,
-                                        )
-                            else:
-                                run_command_safe(
-                                    ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
-                                    check=True,
+                                        try:
+                                            run_command_safe(
+                                                [
+                                                    "git",
+                                                    "push",
+                                                    "origin",
+                                                    f"HEAD:refs/heads/{pr_branch}",
+                                                ],
+                                                check=True,
+                                            )
+                                            print(
+                                                f"✅ Pushed doc updates to PR branch ({pr_branch})"
+                                            )
+                                        finally:
+                                            run_command_safe(
+                                                [
+                                                    "git",
+                                                    "remote",
+                                                    "set-url",
+                                                    "origin",
+                                                    current_origin,
+                                                ],
+                                                check=False,
+                                            )
+                                else:
+                                    run_command_safe(
+                                        [
+                                            "git",
+                                            "push",
+                                            "origin",
+                                            f"HEAD:refs/heads/{pr_branch}",
+                                        ],
+                                        check=True,
+                                    )
+                                    print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
+                            except subprocess.CalledProcessError as e:
+                                print(
+                                    f"Warning: Failed to push doc updates: {e}. "
+                                    "Check that GH_PAT has repo scope and the PR allows maintainer pushes."
                                 )
-                                print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
-                        except subprocess.CalledProcessError as e:
-                            print(
-                                f"Warning: Failed to push doc updates: {e}. "
-                                "Check that GH_PAT has repo scope and the PR allows maintainer pushes."
-                            )
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
