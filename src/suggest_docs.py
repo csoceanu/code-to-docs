@@ -114,12 +114,14 @@ def _resolve_pr_push_target(pr_number):
 def _push_docs_pr_for_merged(pr_number, docs_files, gh_token):
     """Create a docs PR for a merged source PR.
 
-    Returns the docs PR URL on success, or None on failure.
+    Returns the docs PR URL on success (empty string if URL could not
+    be extracted), or None on failure.
     """
     base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
     docs_branch = f"docs/update-from-pr-{pr_number}"
     print(f"PR is merged — creating docs PR against {base_branch}...")
     try:
+        run_command_safe(["git", "fetch", "origin", docs_branch], check=False)
         run_command_safe(["git", "checkout", "-B", docs_branch], check=True)
         run_command_safe(
             ["git", "push", "--set-upstream", "origin", docs_branch, "--force-with-lease"],
@@ -139,9 +141,9 @@ def _push_docs_pr_for_merged(pr_number, docs_files, gh_token):
         existing_pr = check_pr.stdout.strip() if check_pr.returncode == 0 else "[]"
         if existing_pr and existing_pr != "[]":
             try:
-                url = json.loads(existing_pr)[0].get("url")
+                url = json.loads(existing_pr)[0].get("url", "")
             except (ValueError, IndexError, KeyError):
-                url = None
+                url = ""
             print(f"✅ Updated existing docs PR (branch {docs_branch})")
             return url
 
@@ -162,7 +164,7 @@ def _push_docs_pr_for_merged(pr_number, docs_files, gh_token):
             check=True,
             env={**os.environ, "GH_TOKEN": gh_token},
         )
-        url = create_result.stdout.strip() if create_result.stdout.strip() else None
+        url = create_result.stdout.strip() or ""
         print(f"✅ Created docs PR (branch {docs_branch})")
         return url
     except subprocess.CalledProcessError as e:
@@ -522,6 +524,7 @@ def main():
 
                     pr_branch, pr_repo_url, pr_merged = _resolve_pr_push_target(pr_number)
                     docs_pr_url = None
+                    docs_pr_failed = False
                     commit_msg = "docs: update documentation based on code changes"
                     if commit_info:
                         commit_msg += "\n\nAssisted-by: code-to-docs AI"
@@ -538,8 +541,8 @@ def main():
                         print("Warning: Could not resolve PR branch name, cannot push")
                     elif pr_merged:
                         docs_pr_url = _push_docs_pr_for_merged(pr_number, docs_files, gh_token)
-                        if not docs_pr_url:
-                            pr_merged = False
+                        if docs_pr_url is None:
+                            docs_pr_failed = True
                     else:
                         origin_url = run_command_safe(
                             ["git", "config", "--get", "remote.origin.url"], check=False
@@ -648,7 +651,11 @@ def main():
                             confirm_parts.append("</details>")
                             confirm_parts.append("")
                     docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
-                    if docs_subfolder and pr_merged and docs_pr_url:
+                    if docs_subfolder and pr_merged and docs_pr_failed:
+                        confirm_parts.append(
+                            "Failed to create a docs PR. The changes are shown above for manual application."
+                        )
+                    elif docs_subfolder and pr_merged and docs_pr_url:
                         confirm_parts.append(f"A docs PR has been created: {docs_pr_url}")
                     elif docs_subfolder and pr_merged:
                         confirm_parts.append("A docs PR has been created with these changes.")
