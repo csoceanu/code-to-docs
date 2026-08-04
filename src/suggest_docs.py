@@ -145,8 +145,8 @@ def _push_docs_pr_for_merged(pr_number, docs_files, gh_token):
                 url = pr_data.get("url", "")
                 pr_num = pr_data.get("number")
             except (ValueError, IndexError, KeyError):
-                url = ""
-                pr_num = None
+                print(f"Warning: Could not parse existing PR data for {docs_branch}")
+                return None
             if pr_num:
                 run_command_safe(
                     ["gh", "pr", "edit", str(pr_num), "--body", pr_body],

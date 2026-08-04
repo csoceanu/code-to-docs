@@ -175,11 +175,11 @@ class TestPushDocsPrForMerged:
             result = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
         assert result is None
 
-    def test_existing_pr_bad_json_returns_empty(self):
+    def test_existing_pr_bad_json_returns_none(self):
         side_effect, _ = self._mock_run(pr_list_stdout="not-json")
         with patch("suggest_docs.run_command_safe", side_effect=side_effect):
-            url = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
-        assert url == ""
+            result = _push_docs_pr_for_merged("42", ["docs/guide.md"], "token")
+        assert result is None
 
     def test_create_empty_stdout_returns_empty(self):
         side_effect, _ = self._mock_run(create_stdout="")
