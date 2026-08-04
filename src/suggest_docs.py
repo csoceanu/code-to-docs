@@ -19,6 +19,7 @@ import argparse
 import difflib
 import os
 import re
+import subprocess
 from pathlib import Path
 
 from comments import (
@@ -486,32 +487,44 @@ def main():
                             pr_repo_url
                         ) != _normalize_github_url(current_origin)
 
-                        if is_fork:
-                            if not setup_git_credentials(gh_token, pr_repo_url):
-                                print(
-                                    "Warning: Failed to configure credentials for fork, cannot push"
-                                )
-                            else:
-                                run_command_safe(
-                                    ["git", "remote", "set-url", "origin", pr_repo_url], check=True
-                                )
-                                try:
+                        try:
+                            if is_fork:
+                                if not setup_git_credentials(gh_token, pr_repo_url):
+                                    print(
+                                        "Warning: Failed to configure credentials for fork, cannot push"
+                                    )
+                                else:
                                     run_command_safe(
-                                        ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
+                                        ["git", "remote", "set-url", "origin", pr_repo_url],
                                         check=True,
                                     )
-                                    print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
-                                finally:
-                                    run_command_safe(
-                                        ["git", "remote", "set-url", "origin", current_origin],
-                                        check=False,
-                                    )
-                        else:
-                            run_command_safe(
-                                ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
-                                check=True,
+                                    try:
+                                        run_command_safe(
+                                            [
+                                                "git",
+                                                "push",
+                                                "origin",
+                                                f"HEAD:refs/heads/{pr_branch}",
+                                            ],
+                                            check=True,
+                                        )
+                                        print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
+                                    finally:
+                                        run_command_safe(
+                                            ["git", "remote", "set-url", "origin", current_origin],
+                                            check=False,
+                                        )
+                            else:
+                                run_command_safe(
+                                    ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
+                                    check=True,
+                                )
+                                print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
+                        except subprocess.CalledProcessError as e:
+                            print(
+                                f"Warning: Failed to push doc updates: {e}. "
+                                "Check that GH_PAT has repo scope and the PR allows maintainer pushes."
                             )
-                            print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
