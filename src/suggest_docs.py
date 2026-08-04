@@ -280,6 +280,8 @@ def main():
         print("Failed to set up docs environment")
         return
 
+    checkout_docs_from_base_branch()
+
     # === FILE DISCOVERY ===
     if previous_review and previous_review["review_found"] and previous_review["accepted_files"]:
         relevant_files = previous_review["accepted_files"]
@@ -300,7 +302,6 @@ def main():
                 use_index = False
 
         if not use_index:
-            checkout_docs_from_base_branch()
             file_previews = get_file_content_or_summaries()
 
             if not file_previews:
