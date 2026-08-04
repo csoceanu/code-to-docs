@@ -53,13 +53,17 @@ from jira_integration import (
 )
 from security_utils import run_command_safe, setup_git_credentials
 
+_GITHUB_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
 
 def _normalize_github_url(url):
     """Normalize a GitHub URL to https://github.com/owner/repo for comparison."""
     url = url.strip().rstrip("/")
     if url.endswith(".git"):
         url = url[:-4]
-    if url.startswith("git@github.com:"):
+    if url.startswith("ssh://git@github.com/"):
+        url = "https://github.com/" + url[len("ssh://git@github.com/") :]
+    elif url.startswith("git@github.com:"):
         url = "https://github.com/" + url[len("git@github.com:") :]
     return url
 
@@ -98,8 +102,7 @@ def _resolve_pr_push_target(pr_number):
     branch, owner, repo = parts
     if not branch or not owner or not repo or "null" in (branch, owner, repo):
         return None, None
-    _GITHUB_NAME = re.compile(r"^[a-zA-Z0-9._-]+$")
-    if not _GITHUB_NAME.match(owner) or not _GITHUB_NAME.match(repo):
+    if not _GITHUB_NAME_RE.match(owner) or not _GITHUB_NAME_RE.match(repo):
         print(f"Warning: Invalid owner/repo from PR metadata: {owner}/{repo}")
         return None, None
     clone_url = f"https://github.com/{owner}/{repo}.git"
