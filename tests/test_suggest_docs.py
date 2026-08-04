@@ -48,62 +48,74 @@ class TestNormalizeGithubUrl:
 class TestResolvePrPushTarget:
     def test_returns_none_without_pr_number(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "test")
-        assert _resolve_pr_push_target(None) == (None, None)
-        assert _resolve_pr_push_target("") == (None, None)
-        assert _resolve_pr_push_target("unknown") == (None, None)
+        assert _resolve_pr_push_target(None) == (None, None, False)
+        assert _resolve_pr_push_target("") == (None, None, False)
+        assert _resolve_pr_push_target("unknown") == (None, None, False)
 
     def test_returns_none_without_gh_token(self, monkeypatch):
         monkeypatch.delenv("GH_TOKEN", raising=False)
-        assert _resolve_pr_push_target("42") == (None, None)
+        assert _resolve_pr_push_target("42") == (None, None, False)
 
     def test_returns_none_on_command_failure(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "test")
         with patch("suggest_docs.run_command_safe") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="")
-            assert _resolve_pr_push_target("42") == (None, None)
+            assert _resolve_pr_push_target("42") == (None, None, False)
 
     def test_returns_none_on_null_owner_repo(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "test")
         with patch("suggest_docs.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="my-branch\tnull\tnull")
-            assert _resolve_pr_push_target("42") == (None, None)
+            mock_run.return_value = MagicMock(returncode=0, stdout="my-branch\tnull\tnull\tOPEN")
+            assert _resolve_pr_push_target("42") == (None, None, False)
 
     def test_returns_none_on_null_branch(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "test")
         with patch("suggest_docs.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="null\towner\trepo")
-            assert _resolve_pr_push_target("42") == (None, None)
+            mock_run.return_value = MagicMock(returncode=0, stdout="null\towner\trepo\tOPEN")
+            assert _resolve_pr_push_target("42") == (None, None, False)
 
     def test_returns_none_on_invalid_owner(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "test")
         with patch("suggest_docs.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="branch\tbad owner!\trepo")
-            assert _resolve_pr_push_target("42") == (None, None)
+            mock_run.return_value = MagicMock(returncode=0, stdout="branch\tbad owner!\trepo\tOPEN")
+            assert _resolve_pr_push_target("42") == (None, None, False)
 
     def test_returns_none_on_malformed_output(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "test")
         with patch("suggest_docs.run_command_safe") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="only-one-field")
-            assert _resolve_pr_push_target("42") == (None, None)
+            assert _resolve_pr_push_target("42") == (None, None, False)
 
     def test_returns_branch_and_url_on_success(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "test")
         with patch("suggest_docs.run_command_safe") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0, stdout="fix/my-branch\tfork-owner\tmy-project"
+                returncode=0, stdout="fix/my-branch\tfork-owner\tmy-project\tOPEN"
             )
-            branch, url = _resolve_pr_push_target("42")
+            branch, url, merged = _resolve_pr_push_target("42")
         assert branch == "fix/my-branch"
         assert url == "https://github.com/fork-owner/my-project.git"
+        assert merged is False
+
+    def test_detects_merged_pr(self, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "test")
+        with patch("suggest_docs.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="fix/my-branch\towner\trepo\tMERGED"
+            )
+            branch, url, merged = _resolve_pr_push_target("42")
+        assert branch == "fix/my-branch"
+        assert merged is True
 
     def test_branch_with_slashes(self, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "test")
         with patch("suggest_docs.run_command_safe") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0, stdout="feature/deep/nested/branch\towner\trepo"
+                returncode=0, stdout="feature/deep/nested/branch\towner\trepo\tOPEN"
             )
-            branch, _ = _resolve_pr_push_target("42")
+            branch, _, merged = _resolve_pr_push_target("42")
         assert branch == "feature/deep/nested/branch"
+        assert merged is False
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
