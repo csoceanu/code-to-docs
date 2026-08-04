@@ -36,7 +36,7 @@ from discovery import (
     find_relevant_files_optimized,
     get_file_content_or_summaries,
 )
-from doc_index import build_all_indexes
+from doc_index import build_all_indexes, checkout_docs_from_base_branch
 from generation import (
     ask_ai_for_updated_content,
     generate_updates_parallel,
@@ -300,6 +300,7 @@ def main():
                 use_index = False
 
         if not use_index:
+            checkout_docs_from_base_branch()
             file_previews = get_file_content_or_summaries()
 
             if not file_previews:

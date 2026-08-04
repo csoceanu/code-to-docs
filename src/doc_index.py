@@ -702,6 +702,7 @@ def commit_indexes_to_repo(content_type="indexes"):
 
             try:
                 run_command_safe(["git", "fetch", "origin", base_branch], check=False)
+                run_command_safe(["git", "fetch", "origin", INDEX_BRANCH], check=False)
                 run_command_safe(
                     ["git", "checkout", "-B", INDEX_BRANCH, f"origin/{base_branch}"], check=True
                 )
@@ -1005,6 +1006,66 @@ def _process_file_selection_batch(client, prompt, batch_num, total_batches):
             return []
 
     return []
+
+
+def checkout_docs_from_base_branch():
+    """
+    Add doc files from the base branch that are missing on the PR branch.
+
+    In same-repo mode (DOCS_SUBFOLDER set), the GitHub Action checks out the
+    PR head commit. If docs were added to the base branch after the PR branch
+    was created, they won't exist on the working tree and doc discovery will
+    miss them. This function checks out only the missing files so discovery
+    sees them, while preserving any docs the PR intentionally modified.
+
+    Returns:
+        bool: True if any files were added, False otherwise (non-fatal)
+    """
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
+    if not docs_subfolder:
+        return False
+
+    base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+    docs_root = get_docs_root().resolve()
+    repo_root = docs_root.parent
+
+    try:
+        with working_directory(repo_root):
+            run_command_safe(["git", "fetch", "origin", base_branch], check=False)
+
+            ls_result = run_command_safe(
+                ["git", "ls-tree", "-r", "--name-only", f"origin/{base_branch}", docs_subfolder],
+                check=False,
+            )
+            if ls_result.returncode != 0 or not ls_result.stdout.strip():
+                print(f"No docs found on {base_branch} branch")
+                return False
+
+            base_files = ls_result.stdout.strip().split("\n")
+            missing = [f for f in base_files if not Path(f).exists()]
+
+            if not missing:
+                print("All base branch docs already present on PR branch")
+                return False
+
+            added = 0
+            for file_path in missing:
+                result = run_command_safe(
+                    ["git", "checkout", f"origin/{base_branch}", "--", file_path], check=False
+                )
+                if result.returncode == 0:
+                    added += 1
+
+            if added:
+                print(f"✅ Added {added} doc(s) from {base_branch} branch")
+                return True
+            else:
+                print(f"Warning: Failed to checkout any of {len(missing)} missing doc(s)")
+                return False
+
+    except Exception as e:
+        print(f"Warning: Error adding docs from base branch: {sanitize_output(str(e))}")
+        return False
 
 
 def fetch_indexes_from_main():
