@@ -313,21 +313,50 @@ class TestCheckoutDocsFromBaseBranch:
         monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
         assert checkout_docs_from_base_branch() is False
 
-    def test_calls_git_checkout_with_base_branch(self, monkeypatch, tmp_path):
+    def _mock_ls_tree(self, files):
+        """Helper: return a mock run_command_safe that simulates ls-tree output."""
+
+        def side_effect(cmd, **kwargs):
+            result = MagicMock(returncode=0)
+            if cmd[:3] == ["git", "ls-tree", "-r"]:
+                result.stdout = "\n".join(files)
+            else:
+                result.stdout = ""
+            return result
+
+        return side_effect
+
+    def test_checks_out_only_missing_files(self, monkeypatch, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
+        (docs_dir / "existing.md").write_text("already here")
         monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
         monkeypatch.setenv("DOCS_BASE_BRANCH", "main")
         monkeypatch.chdir(docs_dir)
 
         with patch("doc_index.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
+            mock_run.side_effect = self._mock_ls_tree(["docs/existing.md", "docs/new-file.md"])
             result = checkout_docs_from_base_branch()
 
         assert result is True
-        calls = [c.args[0] for c in mock_run.call_args_list]
-        assert ["git", "fetch", "origin", "main"] in calls
-        assert ["git", "checkout", "origin/main", "--", "docs"] in calls
+        checkout_calls = [
+            c.args[0] for c in mock_run.call_args_list if "checkout" in str(c.args[0])
+        ]
+        assert ["git", "checkout", "origin/main", "--", "docs/new-file.md"] in checkout_calls
+        assert not any("existing.md" in str(c) for c in checkout_calls)
+
+    def test_returns_false_when_all_files_present(self, monkeypatch, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "guide.md").write_text("guide")
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.chdir(docs_dir)
+
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.side_effect = self._mock_ls_tree(["docs/guide.md"])
+            result = checkout_docs_from_base_branch()
+
+        assert result is False
 
     def test_uses_custom_base_branch(self, monkeypatch, tmp_path):
         docs_dir = tmp_path / "docs"
@@ -337,20 +366,35 @@ class TestCheckoutDocsFromBaseBranch:
         monkeypatch.chdir(docs_dir)
 
         with patch("doc_index.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
+            mock_run.side_effect = self._mock_ls_tree(["docs/new.md"])
             checkout_docs_from_base_branch()
 
         calls = [c.args[0] for c in mock_run.call_args_list]
-        assert ["git", "checkout", "origin/develop", "--", "docs"] in calls
+        assert ["git", "fetch", "origin", "develop"] in calls
+        assert ["git", "checkout", "origin/develop", "--", "docs/new.md"] in calls
 
-    def test_returns_false_on_checkout_failure(self, monkeypatch, tmp_path):
+    def test_defaults_to_main_branch(self, monkeypatch, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.delenv("DOCS_BASE_BRANCH", raising=False)
+        monkeypatch.chdir(docs_dir)
+
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.side_effect = self._mock_ls_tree(["docs/new.md"])
+            checkout_docs_from_base_branch()
+
+        calls = [c.args[0] for c in mock_run.call_args_list]
+        assert ["git", "fetch", "origin", "main"] in calls
+
+    def test_returns_false_on_ls_tree_failure(self, monkeypatch, tmp_path):
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir()
         monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
         monkeypatch.chdir(docs_dir)
 
         with patch("doc_index.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1)
+            mock_run.return_value = MagicMock(returncode=1, stdout="")
             result = checkout_docs_from_base_branch()
 
         assert result is False
