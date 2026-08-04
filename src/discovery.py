@@ -24,6 +24,7 @@ from config import (
 # Import documentation index module
 from doc_index import (
     build_all_indexes,
+    checkout_docs_from_base_branch,
     commit_indexes_to_repo,
     fetch_indexes_from_main,
     find_relevant_files_from_indexes,
@@ -341,6 +342,7 @@ def find_relevant_files_optimized(diff):
     Returns:
         list: List of relevant file paths, or None to signal full scan needed
     """
+    checkout_docs_from_base_branch()
     fetch_indexes_from_main()
 
     indexes_changed = False

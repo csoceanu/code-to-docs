@@ -4,10 +4,12 @@ import hashlib
 import os
 
 import pytest
+from unittest.mock import MagicMock, patch
 
 from doc_index import (
     INDEX_DIR,
     SUMMARIES_DIR,
+    checkout_docs_from_base_branch,
     folder_needs_reindex,
     get_doc_folders,
     get_docs_in_folder,
@@ -301,6 +303,68 @@ class TestIndexSaveLoad:
     def test_indexes_exist_empty_dir(self, tmp_path):
         (tmp_path / INDEX_DIR).mkdir()
         assert indexes_exist(docs_root=tmp_path) is False
+
+
+# ── checkout_docs_from_base_branch ───────────────────────────────────────────
+
+
+class TestCheckoutDocsFromBaseBranch:
+    def test_skipped_without_docs_subfolder(self, monkeypatch):
+        monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
+        assert checkout_docs_from_base_branch() is False
+
+    def test_calls_git_checkout_with_base_branch(self, monkeypatch, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.setenv("DOCS_BASE_BRANCH", "main")
+        monkeypatch.chdir(docs_dir)
+
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = checkout_docs_from_base_branch()
+
+        assert result is True
+        calls = [c.args[0] for c in mock_run.call_args_list]
+        assert ["git", "fetch", "origin", "main"] in calls
+        assert ["git", "checkout", "origin/main", "--", "docs"] in calls
+
+    def test_uses_custom_base_branch(self, monkeypatch, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.setenv("DOCS_BASE_BRANCH", "develop")
+        monkeypatch.chdir(docs_dir)
+
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            checkout_docs_from_base_branch()
+
+        calls = [c.args[0] for c in mock_run.call_args_list]
+        assert ["git", "checkout", "origin/develop", "--", "docs"] in calls
+
+    def test_returns_false_on_checkout_failure(self, monkeypatch, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.chdir(docs_dir)
+
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1)
+            result = checkout_docs_from_base_branch()
+
+        assert result is False
+
+    def test_returns_false_on_exception(self, monkeypatch, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.chdir(docs_dir)
+
+        with patch("doc_index.run_command_safe", side_effect=OSError("git not found")):
+            result = checkout_docs_from_base_branch()
+
+        assert result is False
 
 
 # ── Summary filename ─────────────────────────────────────────────────────────

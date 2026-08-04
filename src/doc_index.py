@@ -1007,6 +1007,48 @@ def _process_file_selection_batch(client, prompt, batch_num, total_batches):
     return []
 
 
+def checkout_docs_from_base_branch():
+    """
+    Overlay the docs directory from the base branch onto the working tree.
+
+    In same-repo mode (DOCS_SUBFOLDER set), the GitHub Action checks out the
+    PR head commit. If docs were added to the base branch after the PR branch
+    was created, they won't exist on the working tree and doc discovery will
+    miss them. This function overlays the base branch's docs so discovery
+    sees the docs that will exist on the merge target.
+
+    Returns:
+        bool: True if docs were overlaid, False otherwise (non-fatal)
+    """
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
+    if not docs_subfolder:
+        return False
+
+    base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+    docs_root = get_docs_root().resolve()
+    repo_root = docs_root.parent
+
+    try:
+        with working_directory(repo_root):
+            run_command_safe(["git", "fetch", "origin", base_branch], check=False)
+
+            checkout_result = run_command_safe(
+                ["git", "checkout", f"origin/{base_branch}", "--", docs_subfolder],
+                check=False
+            )
+
+            if checkout_result.returncode == 0:
+                print(f"✅ Overlaid docs from {base_branch} branch")
+                return True
+            else:
+                print(f"Warning: Could not overlay docs from {base_branch}, using PR branch docs")
+                return False
+
+    except Exception as e:
+        print(f"Warning: Error overlaying docs from base branch: {sanitize_output(str(e))}")
+        return False
+
+
 def fetch_indexes_from_main():
     """
     Fetch indexes and summaries from the main/base branch.
