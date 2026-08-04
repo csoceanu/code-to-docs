@@ -17,6 +17,7 @@ All business logic lives in dedicated modules:
 
 import argparse
 import difflib
+import json
 import os
 import re
 import subprocess
@@ -108,6 +109,65 @@ def _resolve_pr_push_target(pr_number):
         return None, None, False
     clone_url = f"https://github.com/{owner}/{repo}.git"
     return branch, clone_url, state == "MERGED"
+
+
+def _push_docs_pr_for_merged(pr_number, docs_files, gh_token):
+    """Create a docs PR for a merged source PR.
+
+    Returns the docs PR URL on success, or None on failure.
+    """
+    base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+    docs_branch = f"docs/update-from-pr-{pr_number}"
+    print(f"PR is merged — creating docs PR against {base_branch}...")
+    try:
+        run_command_safe(["git", "checkout", "-B", docs_branch], check=True)
+        run_command_safe(
+            ["git", "push", "--set-upstream", "origin", docs_branch, "--force-with-lease"],
+            check=True,
+        )
+        pr_body = (
+            f"Documentation updates based on merged PR #{pr_number}.\n\n"
+            "Files updated:\n"
+            + "\n".join([f"- `{f}`" for f in docs_files])
+            + "\n\n*Assisted by code-to-docs AI*"
+        )
+        check_pr = run_command_safe(
+            ["gh", "pr", "list", "--head", docs_branch, "--state", "open", "--json", "number,url"],
+            check=False,
+            env={**os.environ, "GH_TOKEN": gh_token},
+        )
+        existing_pr = check_pr.stdout.strip() if check_pr.returncode == 0 else "[]"
+        if existing_pr and existing_pr != "[]":
+            try:
+                url = json.loads(existing_pr)[0].get("url")
+            except (ValueError, IndexError, KeyError):
+                url = None
+            print(f"✅ Updated existing docs PR (branch {docs_branch})")
+            return url
+
+        create_result = run_command_safe(
+            [
+                "gh",
+                "pr",
+                "create",
+                "--title",
+                f"docs: update documentation from PR #{pr_number}",
+                "--body",
+                pr_body,
+                "--base",
+                base_branch,
+                "--head",
+                docs_branch,
+            ],
+            check=True,
+            env={**os.environ, "GH_TOKEN": gh_token},
+        )
+        url = create_result.stdout.strip() if create_result.stdout.strip() else None
+        print(f"✅ Created docs PR (branch {docs_branch})")
+        return url
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: Failed to create docs PR: {e}")
+        return None
 
 
 def main():
@@ -477,78 +537,9 @@ def main():
                     elif not pr_branch:
                         print("Warning: Could not resolve PR branch name, cannot push")
                     elif pr_merged:
-                        base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
-                        docs_branch = f"docs/update-from-pr-{pr_number}"
-                        docs_pr_url = None
-                        print(f"PR is merged — creating docs PR against {base_branch}...")
-                        try:
-                            run_command_safe(["git", "checkout", "-B", docs_branch], check=True)
-                            run_command_safe(
-                                [
-                                    "git",
-                                    "push",
-                                    "--set-upstream",
-                                    "origin",
-                                    docs_branch,
-                                    "--force-with-lease",
-                                ],
-                                check=True,
-                            )
-                            pr_body = (
-                                f"Documentation updates based on merged PR #{pr_number}.\n\n"
-                                "Files updated:\n"
-                                + "\n".join([f"- `{f}`" for f in docs_files])
-                                + "\n\n*Assisted by code-to-docs AI*"
-                            )
-                            check_pr = run_command_safe(
-                                [
-                                    "gh",
-                                    "pr",
-                                    "list",
-                                    "--head",
-                                    docs_branch,
-                                    "--state",
-                                    "open",
-                                    "--json",
-                                    "number,url",
-                                ],
-                                check=False,
-                                env={**os.environ, "GH_TOKEN": gh_token},
-                            )
-                            existing_pr = (
-                                check_pr.stdout.strip() if check_pr.returncode == 0 else "[]"
-                            )
-                            if existing_pr and existing_pr != "[]":
-                                import json as _json
-
-                                try:
-                                    docs_pr_url = _json.loads(existing_pr)[0].get("url")
-                                except (ValueError, IndexError, KeyError):
-                                    pass
-                                print(f"✅ Updated existing docs PR (branch {docs_branch})")
-                            else:
-                                create_result = run_command_safe(
-                                    [
-                                        "gh",
-                                        "pr",
-                                        "create",
-                                        "--title",
-                                        f"docs: update documentation from PR #{pr_number}",
-                                        "--body",
-                                        pr_body,
-                                        "--base",
-                                        base_branch,
-                                        "--head",
-                                        docs_branch,
-                                    ],
-                                    check=True,
-                                    env={**os.environ, "GH_TOKEN": gh_token},
-                                )
-                                if create_result.stdout.strip():
-                                    docs_pr_url = create_result.stdout.strip()
-                                print(f"✅ Created docs PR (branch {docs_branch})")
-                        except subprocess.CalledProcessError as e:
-                            print(f"Warning: Failed to create docs PR: {e}")
+                        docs_pr_url = _push_docs_pr_for_merged(pr_number, docs_files, gh_token)
+                        if not docs_pr_url:
+                            pr_merged = False
                     else:
                         origin_url = run_command_safe(
                             ["git", "config", "--get", "remote.origin.url"], check=False
