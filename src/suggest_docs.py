@@ -437,7 +437,8 @@ def main():
                 try:
                     os.chdir(docs_subfolder)
                 except OSError:
-                    pass
+                    print("Error: Could not restore working directory, aborting")
+                    return
 
     if not pr_merged:
         checkout_docs_from_base_branch()
