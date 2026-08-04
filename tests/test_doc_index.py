@@ -2,9 +2,9 @@
 
 import hashlib
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 from doc_index import (
     INDEX_DIR,
