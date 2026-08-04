@@ -483,9 +483,12 @@ def main():
                             origin_url.stdout.strip() if origin_url.returncode == 0 else ""
                         )
 
-                        is_fork = pr_repo_url and _normalize_github_url(
+                        is_fork = (
                             pr_repo_url
-                        ) != _normalize_github_url(current_origin)
+                            and current_origin
+                            and _normalize_github_url(pr_repo_url)
+                            != _normalize_github_url(current_origin)
+                        )
 
                         try:
                             if is_fork:
