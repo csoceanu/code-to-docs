@@ -96,7 +96,7 @@ def _resolve_pr_push_target(pr_number):
     if len(parts) != 3:
         return None, None
     branch, owner, repo = parts
-    if not branch or not owner or not repo or "null" in (owner, repo):
+    if not branch or not owner or not repo or "null" in (branch, owner, repo):
         return None, None
     _GITHUB_NAME = re.compile(r"^[a-zA-Z0-9._-]+$")
     if not _GITHUB_NAME.match(owner) or not _GITHUB_NAME.match(repo):
@@ -479,19 +479,32 @@ def main():
                             origin_url.stdout.strip() if origin_url.returncode == 0 else ""
                         )
 
-                        if pr_repo_url and _normalize_github_url(
+                        is_fork = pr_repo_url and _normalize_github_url(
                             pr_repo_url
-                        ) != _normalize_github_url(current_origin):
-                            setup_git_credentials(gh_token, pr_repo_url)
-                            run_command_safe(
-                                ["git", "remote", "set-url", "origin", pr_repo_url], check=True
-                            )
+                        ) != _normalize_github_url(current_origin)
 
-                        run_command_safe(
-                            ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
-                            check=True,
-                        )
-                        print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
+                        if is_fork:
+                            if not setup_git_credentials(gh_token, pr_repo_url):
+                                print(
+                                    "Warning: Failed to configure credentials for fork, cannot push"
+                                )
+                            else:
+                                run_command_safe(
+                                    ["git", "remote", "set-url", "origin", pr_repo_url], check=True
+                                )
+
+                        try:
+                            run_command_safe(
+                                ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
+                                check=True,
+                            )
+                            print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
+                        finally:
+                            if is_fork and current_origin:
+                                run_command_safe(
+                                    ["git", "remote", "set-url", "origin", current_origin],
+                                    check=False,
+                                )
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
