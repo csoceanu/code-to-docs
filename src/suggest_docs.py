@@ -492,19 +492,23 @@ def main():
                                 run_command_safe(
                                     ["git", "remote", "set-url", "origin", pr_repo_url], check=True
                                 )
-
-                        try:
+                                try:
+                                    run_command_safe(
+                                        ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
+                                        check=True,
+                                    )
+                                    print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
+                                finally:
+                                    run_command_safe(
+                                        ["git", "remote", "set-url", "origin", current_origin],
+                                        check=False,
+                                    )
+                        else:
                             run_command_safe(
                                 ["git", "push", "origin", f"HEAD:refs/heads/{pr_branch}"],
                                 check=True,
                             )
                             print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
-                        finally:
-                            if is_fork and current_origin:
-                                run_command_safe(
-                                    ["git", "remote", "set-url", "origin", current_origin],
-                                    check=False,
-                                )
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
