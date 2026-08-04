@@ -702,9 +702,7 @@ def commit_indexes_to_repo(content_type="indexes"):
 
             try:
                 run_command_safe(["git", "fetch", "origin", base_branch], check=False)
-                run_command_safe(
-                    ["git", "fetch", "origin", INDEX_BRANCH], check=False
-                )
+                run_command_safe(["git", "fetch", "origin", INDEX_BRANCH], check=False)
                 run_command_safe(
                     ["git", "checkout", "-B", INDEX_BRANCH, f"origin/{base_branch}"], check=True
                 )
@@ -1036,8 +1034,7 @@ def checkout_docs_from_base_branch():
             run_command_safe(["git", "fetch", "origin", base_branch], check=False)
 
             checkout_result = run_command_safe(
-                ["git", "checkout", f"origin/{base_branch}", "--", docs_subfolder],
-                check=False
+                ["git", "checkout", f"origin/{base_branch}", "--", docs_subfolder], check=False
             )
 
             if checkout_result.returncode == 0:
