@@ -69,12 +69,33 @@ class TestOverwriteFile:
         assert result is False
 
 
+def _get_messages(mock_client):
+    """Extract messages from a mocked client call."""
+    return mock_client.chat.completions.create.call_args[1]["messages"]
+
+
+def _get_user_prompt(mock_client):
+    """Extract the user prompt from a mocked client call."""
+    return _get_messages(mock_client)[1]["content"]
+
+
 # ── ask_ai_for_updated_content ──────────────────────────────────────────────
 
 
 class TestAskAiForUpdatedContent:
     DIFF = "diff --git a/foo.py\n+added line"
     CONTENT = "Some documentation content"
+
+    def test_includes_system_prompt(self):
+        mock_client = _mock_ai_response("NO_UPDATE_NEEDED")
+        with (
+            patch("generation.get_client", return_value=mock_client),
+            patch("generation.get_model_name", return_value="test-model"),
+        ):
+            ask_ai_for_updated_content(self.DIFF, "docs/guide.md", self.CONTENT)
+        messages = _get_messages(mock_client)
+        assert messages[0]["role"] == "system"
+        assert "technical writer" in messages[0]["content"]
 
     def test_returns_updated_content(self):
         mock_client = _mock_ai_response("Updated documentation text")
@@ -101,8 +122,7 @@ class TestAskAiForUpdatedContent:
             patch("generation.get_model_name", return_value="test-model"),
         ):
             ask_ai_for_updated_content(self.DIFF, "docs/guide.rst", self.CONTENT)
-        call_args = mock_client.chat.completions.create.call_args
-        prompt = call_args[1]["messages"][0]["content"]
+        prompt = _get_user_prompt(mock_client)
         assert "RESTRUCTUREDTEXT" in prompt
 
     def test_detects_md_format(self):
@@ -112,8 +132,7 @@ class TestAskAiForUpdatedContent:
             patch("generation.get_model_name", return_value="test-model"),
         ):
             ask_ai_for_updated_content(self.DIFF, "docs/guide.md", self.CONTENT)
-        call_args = mock_client.chat.completions.create.call_args
-        prompt = call_args[1]["messages"][0]["content"]
+        prompt = _get_user_prompt(mock_client)
         assert "MARKDOWN" in prompt
 
     def test_includes_user_instructions(self):
@@ -128,8 +147,7 @@ class TestAskAiForUpdatedContent:
                 self.CONTENT,
                 user_instructions="Focus on API changes only",
             )
-        call_args = mock_client.chat.completions.create.call_args
-        prompt = call_args[1]["messages"][0]["content"]
+        prompt = _get_user_prompt(mock_client)
         assert "Focus on API changes only" in prompt
 
 
@@ -166,7 +184,7 @@ class TestGenerateUpdatesParallel:
         mock_client = MagicMock()
 
         def side_effect(**kwargs):
-            prompt = kwargs["messages"][0]["content"]
+            prompt = kwargs["messages"][-1]["content"]
             mock_resp = MagicMock()
             mock_resp.choices = [MagicMock()]
             if "a.rst" in prompt:

@@ -33,6 +33,12 @@ from security_utils import sanitize_output, validate_docs_file_extension, valida
 
 MAX_FORMAT_RETRIES = 2
 
+_SYSTEM_PROMPT = (
+    "You are a senior technical writer responsible for keeping "
+    "documentation up to date with code changes. You match the "
+    "depth and quality of the existing content."
+)
+
 
 def strip_code_fences(text):
     """Strip wrapping code fences if the LLM wrapped output in them."""
@@ -312,10 +318,7 @@ Use this to understand the intent behind the change, but only document what is a
 """
 
     prompt_template = f"""
-You are updating documentation based on a code diff. Be thorough.
-
 {format_instructions}
-- Ensure consistent indentation and spacing
 
 Git diff:
 {{DIFF_PLACEHOLDER}}
@@ -325,34 +328,26 @@ Current documentation file `{file_path}`:
 {current_content}
 --------------------
 
-DECISION LOGIC:
-1. Does this file document the EXACT thing being changed in the diff?
+DECISION LOGIC — should this file be updated?
+1. Does this file document the area or feature being changed in the diff?
    - If NO → return `NO_UPDATE_NEEDED`
-   - If YES → continue
-
-2. Does the diff add something NEW that should be documented?
+2. Does the diff add or change something that affects what this file documents?
    - If NO → return `NO_UPDATE_NEEDED`
-   - If YES → continue
-
-3. Is that new thing already documented in this file?
+3. Is the change already reflected in this file?
    - If YES → return `NO_UPDATE_NEEDED`
-   - If NO → proceed with the update
+   - If NO → update the file
 
-IMPORTANT: A removed limitation IS a new capability.
-If the diff removes an error, rejection, or "not supported" message,
-the feature that was blocked is now available. Document the new
-capability, not just any constraints around it.
-
-When documenting a new capability, write its documentation as if it
-didn't exist before — because it didn't. Add it where it belongs in
-the file, following the same structure as existing capabilities.
-
-WHAT YOU CAN ADD:
-- Content that documents what was added/changed in the diff
+A removed limitation IS a new capability. If the diff removes an error,
+rejection, or "not supported" message, the feature that was blocked is
+now available.
 
 WHAT YOU MUST NOT ADD:
 - Content unrelated to the diff
-- Restructured or rewritten content
+- Restructured or rewritten existing content
+
+When updating, follow the structure and depth of the existing content.
+Write documentation for new or changed behavior as if it didn't exist
+before — because it didn't.
 
 Return ONLY:
 - `NO_UPDATE_NEEDED` if the diff does not affect what this file documents, OR
@@ -409,7 +404,10 @@ The human reviewer has provided the following guidance. Follow these instruction
     try:
         response = client.chat.completions.create(
             model=model_name,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
         )
         output = (response.choices[0].message.content or "").strip()
     except Exception as e:
@@ -448,7 +446,10 @@ Return ONLY the corrected raw file content, no explanations."""
             try:
                 fix_response = client.chat.completions.create(
                     model=model_name,
-                    messages=[{"role": "user", "content": fix_prompt}],
+                    messages=[
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": fix_prompt},
+                    ],
                 )
                 output = (fix_response.choices[0].message.content or "").strip()
                 output = strip_code_fences(output)
