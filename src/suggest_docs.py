@@ -58,6 +58,32 @@ from security_utils import run_command_safe, setup_git_credentials
 _GITHUB_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
+def _get_pr_description(pr_number):
+    """Fetch the PR title and body for context."""
+    if not pr_number or pr_number == "unknown":
+        return ""
+    gh_token = os.environ.get("GH_TOKEN")
+    if not gh_token:
+        return ""
+    result = run_command_safe(
+        [
+            "gh",
+            "pr",
+            "view",
+            str(pr_number),
+            "--json",
+            "title,body",
+            "--jq",
+            '.title + "\\n" + .body',
+        ],
+        check=False,
+        env={**os.environ, "GH_TOKEN": gh_token},
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    return ""
+
+
 def _normalize_github_url(url):
     """Normalize a GitHub URL to https://github.com/owner/repo for comparison."""
     url = url.strip().rstrip("/")
@@ -335,8 +361,9 @@ def main():
         print(f"Source repository: {commit_info['repo_url']}")
         print(f"Latest commit: {commit_info['short_hash']}")
 
-    # Get PR number for posting comments
+    # Get PR number and description for context
     pr_number = os.environ.get("PR_NUMBER", "unknown")
+    pr_description = _get_pr_description(pr_number)
 
     # === FEATURE ANALYSIS (before docs env setup, since it uses MCP not docs repo) ===
     if feature_mode and feature_issue_key:
@@ -499,6 +526,7 @@ def main():
             user_instructions=user_instructions,
             file_instructions=file_instructions,
             style_guidelines=style_guidelines,
+            pr_description=pr_description,
         )
 
         for file_path, _current, updated in files_with_content:
@@ -522,6 +550,7 @@ def main():
                 user_instructions=user_instructions,
                 file_instructions=file_instructions,
                 style_guidelines=style_guidelines,
+                pr_description=pr_description,
             )
 
             if updated.strip() == "NO_UPDATE_NEEDED":

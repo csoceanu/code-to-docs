@@ -149,6 +149,7 @@ def generate_updates_parallel(
     user_instructions="",
     file_instructions=None,
     style_guidelines="",
+    pr_description="",
 ):
     """
     Generate documentation updates in parallel.
@@ -160,6 +161,7 @@ def generate_updates_parallel(
         user_instructions: Optional global reviewer instructions to pass to the AI
         file_instructions: Optional dict mapping filenames to per-file instructions
         style_guidelines: Optional persistent style guidelines from config file
+        pr_description: Optional PR title and body for context
 
     Returns:
         list: List of (file_path, original_content, updated_content) tuples
@@ -180,6 +182,7 @@ def generate_updates_parallel(
             user_instructions=user_instructions,
             file_instructions=file_instructions,
             style_guidelines=style_guidelines,
+            pr_description=pr_description,
         )
 
         if updated.strip() == "NO_UPDATE_NEEDED":
@@ -229,6 +232,7 @@ def ask_ai_for_updated_content(
     user_instructions="",
     file_instructions=None,
     style_guidelines="",
+    pr_description="",
 ):
     is_markdown = file_path.endswith(".md")
     is_asciidoc = file_path.endswith(".adoc")
@@ -299,6 +303,14 @@ FORMATTING REQUIREMENTS:
 - Use consistent indentation and spacing
 """
 
+    pr_context = ""
+    if pr_description:
+        pr_context = f"""
+PR description (for context only — the diff above is the source of truth):
+{pr_description}
+Use this to understand the intent behind the change, but only document what is actually present in the diff.
+"""
+
     prompt_template = f"""
 You are updating documentation based on a code diff. Be thorough.
 
@@ -307,7 +319,7 @@ You are updating documentation based on a code diff. Be thorough.
 
 Git diff:
 {{DIFF_PLACEHOLDER}}
-
+{pr_context}
 Current documentation file `{file_path}`:
 --------------------
 {current_content}
@@ -331,14 +343,15 @@ If the diff removes an error, rejection, or "not supported" message,
 the feature that was blocked is now available. Document the new
 capability, not just any constraints around it.
 
-Follow the patterns in the existing documentation.
+When documenting a new capability, write its documentation as if it
+didn't exist before — because it didn't. Add it where it belongs in
+the file, following the same structure as existing capabilities.
 
 WHAT YOU CAN ADD:
-- Only content that directly reflects what was added/changed in the diff
+- Content that documents what was added/changed in the diff
 
 WHAT YOU MUST NOT ADD:
-- New sections or paragraphs not justified by the diff
-- Unrelated content not connected to the diff
+- Content unrelated to the diff
 - Restructured or rewritten content
 
 Return ONLY:

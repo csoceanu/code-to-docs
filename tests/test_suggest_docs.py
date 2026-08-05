@@ -7,11 +7,49 @@ from unittest.mock import MagicMock, patch
 sys.modules.setdefault("openai", MagicMock())
 
 from suggest_docs import (
+    _get_pr_description,
     _normalize_github_url,
     _push_docs_pr_for_merged,
     _resolve_pr_push_target,
     main,
 )
+
+# ── _get_pr_description ──────────────────────────────────────────────────────
+
+
+class TestGetPrDescription:
+    def test_returns_empty_without_pr_number(self, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "test")
+        assert _get_pr_description(None) == ""
+        assert _get_pr_description("") == ""
+        assert _get_pr_description("unknown") == ""
+
+    def test_returns_empty_without_gh_token(self, monkeypatch):
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        assert _get_pr_description("42") == ""
+
+    def test_returns_title_and_body(self, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "test")
+        with patch("suggest_docs.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Add new feature\nThis PR adds a new capability."
+            )
+            result = _get_pr_description("42")
+        assert "Add new feature" in result
+        assert "new capability" in result
+
+    def test_returns_empty_on_command_failure(self, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "test")
+        with patch("suggest_docs.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="")
+            assert _get_pr_description("42") == ""
+
+    def test_returns_empty_on_empty_output(self, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "test")
+        with patch("suggest_docs.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="   ")
+            assert _get_pr_description("42") == ""
+
 
 # ── _normalize_github_url ────────────────────────────────────────────────────
 
