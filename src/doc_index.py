@@ -1096,9 +1096,7 @@ def fetch_indexes_from_main():
             print(f"Checking for cached indexes/summaries on {base_branch} branch...")
 
             # Fetch the base branch
-            fetch_result = run_command_safe(
-                ["git", "fetch", "origin", base_branch], check=False
-            )
+            fetch_result = run_command_safe(["git", "fetch", "origin", base_branch], check=False)
             if fetch_result.returncode != 0:
                 print(
                     f"Could not fetch {base_branch} branch "
