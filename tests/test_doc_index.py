@@ -313,6 +313,20 @@ class TestCheckoutDocsFromBaseBranch:
         monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
         assert checkout_docs_from_base_branch() is False
 
+    def test_empty_base_branch_falls_back_to_main(self, monkeypatch, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        monkeypatch.setenv("DOCS_BASE_BRANCH", "")
+        monkeypatch.chdir(docs_dir)
+
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.side_effect = self._mock_ls_tree(["docs/new.md"])
+            checkout_docs_from_base_branch()
+
+        calls = [c.args[0] for c in mock_run.call_args_list]
+        assert ["git", "fetch", "origin", "main"] in calls
+
     def _mock_ls_tree(self, files):
         """Helper: return a mock run_command_safe that simulates ls-tree output."""
 

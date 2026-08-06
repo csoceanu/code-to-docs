@@ -681,7 +681,7 @@ def commit_indexes_to_repo(content_type="indexes"):
                 print(f"No {content_type} changes to commit")
                 return False
 
-            base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+            base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
             gh_token = os.environ.get("GH_TOKEN")
             if not gh_token:
                 print("Warning: GH_TOKEN not set, cannot create index PR")
@@ -1025,7 +1025,7 @@ def checkout_docs_from_base_branch():
     if not docs_subfolder:
         return False
 
-    base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+    base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
     docs_root = get_docs_root().resolve()
     repo_root = docs_root.parent
 
@@ -1091,7 +1091,7 @@ def fetch_indexes_from_main():
 
     try:
         with working_directory(target_dir):
-            base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+            base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
 
             print(f"Checking for cached indexes/summaries on {base_branch} branch...")
 
