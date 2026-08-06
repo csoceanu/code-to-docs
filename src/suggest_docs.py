@@ -32,7 +32,7 @@ from config import (
     get_client,
     get_max_context_chars,
     get_model_name,
-    load_style_config,
+    load_style_config_from_branch,
 )
 from discovery import (
     ask_ai_for_relevant_files,
@@ -243,8 +243,9 @@ def main():
     source = "MAX_CONTEXT_CHARS" if raw else "default"
     print(f"Context budget: {budget:,} chars (from {source})")
 
-    # Load persistent style guidelines (if configured)
-    style_guidelines = load_style_config()
+    # Load persistent style guidelines from the base branch so the AI always
+    # uses the repo's current style config, even if the PR branch predates it.
+    style_guidelines = load_style_config_from_branch()
 
     # Handle --build-index mode
     if args.build_index:
