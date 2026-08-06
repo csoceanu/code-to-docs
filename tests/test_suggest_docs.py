@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 # Stub openai before any script imports config
 sys.modules.setdefault("openai", MagicMock())
 
+# ── load_style_config_from_branch ───────────────────────────────────────────
+from config import load_style_config_from_branch
 from suggest_docs import (
     _get_pr_description,
     _normalize_github_url,
@@ -13,6 +15,71 @@ from suggest_docs import (
     _resolve_pr_push_target,
     main,
 )
+
+
+class TestLoadStyleConfigFromBranch:
+    def test_loads_style_from_main(self):
+        with patch("config.run_command_safe") as mock_run:
+            fetch_result = MagicMock(returncode=0, stdout="")
+            show_result = MagicMock(
+                returncode=0, stdout="# Style Rules\nAlways include examples.\n"
+            )
+            mock_run.side_effect = [fetch_result, show_result]
+            result = load_style_config_from_branch()
+        assert "Always include examples" in result
+        calls = [c.args[0] for c in mock_run.call_args_list]
+        assert ["git", "fetch", "origin", "main"] == calls[0]
+        assert "git" == calls[1][0] and "show" == calls[1][1]
+
+    def test_returns_empty_when_file_missing(self):
+        with patch("config.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="")
+            assert load_style_config_from_branch() == ""
+
+    def test_returns_empty_when_file_empty(self):
+        with patch("config.run_command_safe") as mock_run:
+            fetch_result = MagicMock(returncode=0, stdout="")
+            show_result = MagicMock(returncode=0, stdout="   ")
+            mock_run.side_effect = [fetch_result, show_result]
+            assert load_style_config_from_branch() == ""
+
+    def test_uses_custom_path(self, monkeypatch):
+        monkeypatch.setenv("STYLE_CONFIG_PATH", "custom/style.md")
+        with patch("config.run_command_safe") as mock_run:
+            fetch_result = MagicMock(returncode=0, stdout="")
+            show_result = MagicMock(returncode=0, stdout="Custom rules")
+            mock_run.side_effect = [fetch_result, show_result]
+            result = load_style_config_from_branch()
+        assert result == "Custom rules"
+        show_cmd = mock_run.call_args_list[1].args[0]
+        assert "custom/style.md" in show_cmd[2]
+
+    def test_uses_custom_base_branch(self, monkeypatch):
+        monkeypatch.setenv("DOCS_BASE_BRANCH", "develop")
+        with patch("config.run_command_safe") as mock_run:
+            fetch_result = MagicMock(returncode=0, stdout="")
+            show_result = MagicMock(returncode=0, stdout="Rules")
+            mock_run.side_effect = [fetch_result, show_result]
+            load_style_config_from_branch()
+        fetch_cmd = mock_run.call_args_list[0].args[0]
+        assert ["git", "fetch", "origin", "develop"] == fetch_cmd
+        show_cmd = mock_run.call_args_list[1].args[0]
+        assert "origin/develop:" in show_cmd[2]
+
+    def test_rejects_non_md_path(self, monkeypatch):
+        monkeypatch.setenv("STYLE_CONFIG_PATH", "style.txt")
+        with patch("config.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="should not be read")
+            assert load_style_config_from_branch() == ""
+        assert mock_run.call_count == 1
+
+    def test_rejects_path_traversal(self, monkeypatch):
+        monkeypatch.setenv("STYLE_CONFIG_PATH", "../../../etc/passwd.md")
+        with patch("config.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="should not be read")
+            assert load_style_config_from_branch() == ""
+        assert mock_run.call_count == 1
+
 
 # ── _get_pr_description ──────────────────────────────────────────────────────
 

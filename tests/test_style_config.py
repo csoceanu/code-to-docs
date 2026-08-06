@@ -1,70 +1,8 @@
-"""Tests for persistent style configuration and output format validation."""
+"""Tests for output format validation and code fence stripping."""
 
-import os
 from unittest.mock import MagicMock, patch
 
-from config import load_style_config
 from generation import strip_code_fences, validate_format
-
-# =============================================================================
-# load_style_config tests
-# =============================================================================
-
-
-class TestLoadStyleConfig:
-    def test_loads_from_explicit_path(self, tmp_path):
-        style_file = tmp_path / "my-style.md"
-        style_file.write_text("Use active voice\nKeep paragraphs short")
-        os.chdir(tmp_path)
-        result = load_style_config(config_path=str(style_file))
-        assert "active voice" in result
-
-    def test_returns_empty_when_file_missing(self, tmp_path):
-        os.chdir(tmp_path)
-        result = load_style_config(config_path="nonexistent.md")
-        assert result == ""
-
-    def test_auto_detects_default_path(self, tmp_path):
-        code_to_docs_dir = tmp_path / ".code-to-docs"
-        code_to_docs_dir.mkdir()
-        style_file = code_to_docs_dir / "style.md"
-        style_file.write_text("# Style Rules\nUse dashes for lists")
-        os.chdir(tmp_path)
-        result = load_style_config()
-        assert "dashes" in result
-
-    def test_returns_empty_when_no_auto_detect(self, tmp_path):
-        os.chdir(tmp_path)
-        result = load_style_config()
-        assert result == ""
-
-    def test_env_var_override(self, tmp_path, monkeypatch):
-        style_file = tmp_path / "custom-style.md"
-        style_file.write_text("Custom style from env var")
-        os.chdir(tmp_path)
-        monkeypatch.setenv("STYLE_CONFIG_PATH", str(style_file))
-        result = load_style_config()
-        assert "Custom style" in result
-
-    def test_rejects_non_md_extension(self, tmp_path):
-        style_file = tmp_path / "style.txt"
-        style_file.write_text("Some style rules")
-        os.chdir(tmp_path)
-        result = load_style_config(config_path=str(style_file))
-        assert result == ""
-
-    def test_rejects_path_traversal(self, tmp_path):
-        os.chdir(tmp_path)
-        result = load_style_config(config_path="../../../etc/passwd.md")
-        assert result == ""
-
-    def test_returns_empty_for_empty_file(self, tmp_path):
-        style_file = tmp_path / "empty.md"
-        style_file.write_text("")
-        os.chdir(tmp_path)
-        result = load_style_config(config_path=str(style_file))
-        assert result == ""
-
 
 # =============================================================================
 # strip_code_fences tests

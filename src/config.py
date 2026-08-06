@@ -9,12 +9,11 @@ or a user-specified STYLE_CONFIG_PATH.
 
 import os
 import re
-from pathlib import Path
 
 import openai
 from openai import OpenAI
 
-from security_utils import sanitize_output, validate_file_path
+from security_utils import run_command_safe, sanitize_output
 
 
 def get_client():
@@ -150,51 +149,47 @@ _AUTO_DETECT_PATHS = [
 _ALLOWED_STYLE_EXTENSIONS = (".md",)
 
 
-def load_style_config(config_path=None):
-    """Load documentation style guidelines from a config file."""
-    if not config_path:
-        config_path = os.environ.get("STYLE_CONFIG_PATH", "")
+def load_style_config_from_branch():
+    """Load style config from the base branch via git show.
 
-    if config_path:
-        if not validate_file_path(config_path):
-            print(
-                f"Warning: Style config path rejected by security check: '{config_path}', skipping"
-            )
-            return ""
-        if not config_path.endswith(_ALLOWED_STYLE_EXTENSIONS):
-            print(f"Warning: Style config must be a .md file, got '{config_path}', skipping")
-            return ""
-        config_file = Path(config_path)
-        if not config_file.is_file():
-            print(f"Warning: Style config not found at '{config_path}', skipping")
-            return ""
-    else:
-        config_file = None
-        for candidate in _AUTO_DETECT_PATHS:
-            p = Path(candidate)
-            if p.is_file() and validate_file_path(str(p)):
-                config_file = p
-                break
-        if config_file is None:
-            return ""
-
-    config_path_str = str(config_file)
-    print(f"Loading style config from: {config_path_str}")
-
+    Reads the style config directly from origin/{base_branch} so the
+    repo's current style rules always apply, regardless of when the
+    PR branch was created.
+    """
     try:
-        raw = config_file.read_text(encoding="utf-8").strip()
+        base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+        style_path = os.environ.get("STYLE_CONFIG_PATH", "")
+
+        paths = [style_path] if style_path else _AUTO_DETECT_PATHS
+
+        run_command_safe(["git", "fetch", "origin", base_branch], check=False)
+
+        for path in paths:
+            if not path or not path.endswith(_ALLOWED_STYLE_EXTENSIONS):
+                if path:
+                    print(f"Warning: Style config must be a .md file, got '{path}', skipping")
+                continue
+            if ".." in path.split("/") or path.startswith("/"):
+                print(f"Warning: Style config path rejected (traversal): '{path}', skipping")
+                continue
+            result = run_command_safe(
+                ["git", "show", f"origin/{base_branch}:{path}"],
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                print(
+                    f"Loaded style config from {base_branch}:{path}"
+                    f" ({len(result.stdout.strip()):,} chars)"
+                )
+                return result.stdout.strip()
+            if result.returncode == 0 and not result.stdout.strip():
+                print(f"Warning: Style config '{path}' on {base_branch} is empty, skipping")
+            elif style_path:
+                print(f"Warning: Style config '{path}' not found on {base_branch}")
     except Exception as e:
-        print(
-            f"Warning: Could not read style config '{config_path_str}': {sanitize_output(str(e))}"
-        )
-        return ""
+        print(f"Warning: Could not load style config from base branch: {sanitize_output(str(e))}")
 
-    if not raw:
-        print(f"Warning: Style config '{config_path_str}' is empty, skipping")
-        return ""
-
-    print(f"Loaded style config ({len(raw):,} chars)")
-    return raw
+    return ""
 
 
 def check_context_error(e):
