@@ -358,7 +358,7 @@ WHEN UPDATING, BE COMPREHENSIVE — cover the change fully so readers understand
 STAY GROUNDED — DO NOT:
 - Add content unrelated to the changes in the diff
 - Invent features, parameters, or behaviors not present in the diff
-- Restructure or rewrite parts of the file that are unaffected by the diff
+- Reorganize or rewrite existing content that is unaffected by the diff
 - Remove content that is still accurate
 
 Return ONLY:
