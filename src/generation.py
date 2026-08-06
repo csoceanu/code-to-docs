@@ -35,8 +35,9 @@ MAX_FORMAT_RETRIES = 2
 
 _SYSTEM_PROMPT = (
     "You are a senior technical writer responsible for keeping "
-    "documentation up to date with code changes. You match the "
-    "depth and quality of the existing content."
+    "documentation up to date with code changes. When a change "
+    "warrants a documentation update, you document it thoroughly "
+    "so readers fully understand the new or changed behavior."
 )
 
 
@@ -335,23 +336,34 @@ DECISION LOGIC — should this file be updated?
    - If NO → return `NO_UPDATE_NEEDED`
 3. Is the change already reflected in this file?
    - If YES → return `NO_UPDATE_NEEDED`
-   - If NO → update the file
+   - If NO → update the file comprehensively (see below)
 
 A removed limitation IS a new capability. If the diff removes an error,
 rejection, or "not supported" message, the feature that was blocked is
 now available.
 
-WHAT YOU MUST NOT ADD:
-- Content unrelated to the diff
-- Restructured or rewritten existing content
+WHEN UPDATING, BE COMPREHENSIVE — cover the change fully so readers understand it:
+- Document new parameters, options, flags, configuration fields — include their names,
+  types, allowed values, defaults, and what they control
+- Document new behaviors, modes, workflows, or capabilities introduced by the diff
+- Add usage examples where they help readers understand new features
+  (match the style of existing examples in the file)
+- Update existing examples that are now outdated or incomplete due to the changes
+- Document important error handling, edge cases, or caveats introduced by the diff
+- Add new sections or subsections when the change is substantial enough to warrant them
+- If the diff modifies existing behavior, update ALL references to the old behavior
+  throughout the file
+- Ensure cross-references and links remain accurate after the update
 
-When updating, follow the structure and depth of the existing content.
-Write documentation for new or changed behavior as if it didn't exist
-before — because it didn't.
+STAY GROUNDED — DO NOT:
+- Add content unrelated to the changes in the diff
+- Invent features, parameters, or behaviors not present in the diff
+- Reorganize or rewrite existing content that is unaffected by the diff
+- Remove content that is still accurate
 
 Return ONLY:
 - `NO_UPDATE_NEEDED` if the diff does not affect what this file documents, OR
-- The complete updated file with the necessary changes
+- The complete updated file with all necessary changes applied
 """
 
     # Inject persistent style guidelines (takes precedence over base prompt on conflict)
