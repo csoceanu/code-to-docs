@@ -28,7 +28,7 @@ def get_docs_file_url(file_path, commit_info=None):
         GitHub URL to the file, or None if URL cannot be constructed
     """
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
-    base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+    base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
 
     if docs_subfolder and commit_info and "repo_url" in commit_info:
         # Same repo scenario: use source repo URL + subfolder

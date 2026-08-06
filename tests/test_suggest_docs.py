@@ -66,6 +66,16 @@ class TestLoadStyleConfigFromBranch:
         show_cmd = mock_run.call_args_list[1].args[0]
         assert "origin/develop:" in show_cmd[2]
 
+    def test_empty_base_branch_falls_back_to_main(self, monkeypatch):
+        monkeypatch.setenv("DOCS_BASE_BRANCH", "")
+        with patch("config.run_command_safe") as mock_run:
+            fetch_result = MagicMock(returncode=0, stdout="")
+            show_result = MagicMock(returncode=0, stdout="Rules")
+            mock_run.side_effect = [fetch_result, show_result]
+            load_style_config_from_branch()
+        fetch_cmd = mock_run.call_args_list[0].args[0]
+        assert ["git", "fetch", "origin", "main"] == fetch_cmd
+
     def test_rejects_non_md_path(self, monkeypatch):
         monkeypatch.setenv("STYLE_CONFIG_PATH", "style.txt")
         with patch("config.run_command_safe") as mock_run:

@@ -681,7 +681,7 @@ def commit_indexes_to_repo(content_type="indexes"):
                 print(f"No {content_type} changes to commit")
                 return False
 
-            base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+            base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
             gh_token = os.environ.get("GH_TOKEN")
             if not gh_token:
                 print("Warning: GH_TOKEN not set, cannot create index PR")
@@ -1025,7 +1025,7 @@ def checkout_docs_from_base_branch():
     if not docs_subfolder:
         return False
 
-    base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+    base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
     docs_root = get_docs_root().resolve()
     repo_root = docs_root.parent
 
@@ -1091,33 +1091,48 @@ def fetch_indexes_from_main():
 
     try:
         with working_directory(target_dir):
-            base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+            base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
 
             print(f"Checking for cached indexes/summaries on {base_branch} branch...")
 
             # Fetch the base branch
-            run_command_safe(["git", "fetch", "origin", base_branch], check=False)
+            fetch_result = run_command_safe(["git", "fetch", "origin", base_branch], check=False)
+            if fetch_result.returncode != 0:
+                print(
+                    f"Could not fetch {base_branch} branch "
+                    f"(exit {fetch_result.returncode}): "
+                    f"{sanitize_output(fetch_result.stderr or '').strip()}"
+                )
+                return False
 
-            # Check if index directory exists on the base branch
+            # Check if the index directory exists on the base branch
             check_result = run_command_safe(
-                ["git", "ls-tree", "-r", f"origin/{base_branch}", "--name-only"], check=False
+                ["git", "ls-tree", f"origin/{base_branch}", "--", index_relative_path],
+                check=False,
             )
 
-            if check_result.returncode != 0 or index_relative_path not in check_result.stdout:
-                print(f"No cached indexes/summaries found on {base_branch} branch")
+            if check_result.returncode != 0 or not check_result.stdout.strip():
+                print(
+                    f"No cached indexes/summaries found on {base_branch} branch "
+                    f"(looked for {index_relative_path})"
+                )
                 return False
 
             # Checkout the index directory from main (includes summaries)
             print(f"Fetching indexes and summaries from {base_branch}...")
             checkout_result = run_command_safe(
-                ["git", "checkout", f"origin/{base_branch}", "--", index_relative_path], check=False
+                ["git", "checkout", f"origin/{base_branch}", "--", index_relative_path],
+                check=False,
             )
 
             if checkout_result.returncode == 0:
                 print(f"✅ Fetched indexes and summaries from {base_branch}")
                 return True
             else:
-                print(f"Could not fetch indexes/summaries from {base_branch}")
+                print(
+                    f"Could not checkout indexes from {base_branch}: "
+                    f"{sanitize_output(checkout_result.stderr or '').strip()}"
+                )
                 return False
 
     except Exception as e:

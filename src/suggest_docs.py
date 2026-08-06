@@ -146,7 +146,7 @@ def _push_docs_pr_for_merged(pr_number, docs_branch, docs_files, gh_token):
     Returns the docs PR URL on success (empty string if URL could not
     be extracted), or None on failure.
     """
-    base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+    base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
     try:
         run_command_safe(
             ["git", "push", "--set-upstream", "origin", docs_branch, "--force-with-lease"],
@@ -448,7 +448,7 @@ def main():
         pr_branch_info = _resolve_pr_push_target(pr_number)
         _, _, pr_merged = pr_branch_info
         if pr_merged:
-            base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+            base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
             docs_branch = f"docs/update-from-pr-{pr_number}"
             try:
                 os.chdir("..")
