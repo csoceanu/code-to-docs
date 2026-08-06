@@ -233,7 +233,7 @@ def push_and_open_pr(modified_files, commit_info=None):
                     "--body",
                     pr_body,
                     "--base",
-                    os.environ.get("DOCS_BASE_BRANCH", "main"),
+                    os.environ.get("DOCS_BASE_BRANCH") or "main",
                     "--head",
                     branch_name,
                 ],

@@ -157,7 +157,7 @@ def load_style_config_from_branch():
     PR branch was created.
     """
     try:
-        base_branch = os.environ.get("DOCS_BASE_BRANCH", "main")
+        base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
         style_path = os.environ.get("STYLE_CONFIG_PATH", "")
 
         paths = [style_path] if style_path else _AUTO_DETECT_PATHS
