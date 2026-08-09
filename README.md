@@ -88,7 +88,7 @@ jobs:
         id: pr_info
         if: github.event.issue.pull_request
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=${{ github.event.issue.number }}
           echo "Extracting PR information for PR #$PR_NUMBER"
@@ -111,7 +111,7 @@ jobs:
           repository: ${{ steps.pr_info.outputs.head_repo || github.repository }}
           ref: ${{ steps.pr_info.outputs.head_ref || github.ref }}
           fetch-depth: 0
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Documentation Assistant
         uses: redhat-community-ai-tools/code-to-docs@main
@@ -120,7 +120,7 @@ jobs:
           model-api-key: ${{ secrets.MODEL_API_KEY }}
           model-name: ${{ secrets.MODEL_NAME }}
           docs-repo-url: ${{ secrets.DOCS_REPO_URL }}
-          github-token: ${{ secrets.GH_PAT }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ github.event.issue.number }}
           pr-base: origin/${{ steps.pr_info.outputs.base_ref || 'main' }}
           pr-head-sha: ${{ steps.pr_info.outputs.head_ref }}
@@ -145,7 +145,7 @@ Add these in **Settings → Secrets → Actions**:
 | `MODEL_API_KEY` | API key for the model endpoint (leave empty if not required) |
 | `MODEL_NAME` | Model name to use (e.g., `meta-llama/Llama-3.1-8B-Instruct`, `gemini-2.0-flash`) |
 | `DOCS_REPO_URL` | Docs repository URL (e.g., `https://github.com/org/docs`) |
-| `GH_PAT` | GitHub token with `repo` + `pull_requests:write` permissions. Used for creating docs PRs, posting review comments, and submitting index update PRs |
+| `GITHUB_TOKEN` | Built-in GitHub Actions token — no setup needed. Works for same-repo setups (`docs-subfolder`): creating docs PRs, posting review comments, and submitting index update PRs. For fork PRs, doc changes are shown as suggestions in the PR comment instead of pushed directly. **For separate docs repos** (`docs-repo-url` pointing to a different repo), use a PAT with `repo` scope instead. |
 | `DOCS_SUBFOLDER` | _(Optional)_ Docs subfolder path (e.g., `docs`) |
 | `DOCS_BASE_BRANCH` | _(Optional)_ Base branch for docs PRs (default: `main`) |
 | `JIRA_URL` | _(Optional, for `[review-feature]`)_ Jira instance URL (e.g., `https://your-company.atlassian.net`) |
