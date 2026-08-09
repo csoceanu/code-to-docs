@@ -53,7 +53,7 @@ from jira_integration import (
     format_feature_review_section,
     parse_feature_command,
 )
-from security_utils import run_command_safe, setup_git_credentials
+from security_utils import run_command_safe
 
 _GITHUB_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
@@ -440,6 +440,8 @@ def main():
     # and file writes land on the correct branch.
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
     pr_merged = False
+    is_fork = False
+    push_failed = False
     docs_pr_url = None
     docs_pr_failed = False
     docs_branch = None
@@ -617,6 +619,7 @@ def main():
                         )
                         if not pr_branch:
                             print("Warning: Could not resolve PR branch name, cannot push")
+                            push_failed = True
                         else:
                             origin_url = run_command_safe(
                                 ["git", "config", "--get", "remote.origin.url"], check=False
@@ -632,42 +635,13 @@ def main():
                                 != _normalize_github_url(current_origin)
                             )
 
-                            try:
-                                if is_fork:
-                                    if not setup_git_credentials(gh_token, pr_repo_url):
-                                        print(
-                                            "Warning: Failed to configure credentials for fork, cannot push"
-                                        )
-                                    else:
-                                        run_command_safe(
-                                            ["git", "remote", "set-url", "origin", pr_repo_url],
-                                            check=True,
-                                        )
-                                        try:
-                                            run_command_safe(
-                                                [
-                                                    "git",
-                                                    "push",
-                                                    "origin",
-                                                    f"HEAD:refs/heads/{pr_branch}",
-                                                ],
-                                                check=True,
-                                            )
-                                            print(
-                                                f"✅ Pushed doc updates to PR branch ({pr_branch})"
-                                            )
-                                        finally:
-                                            run_command_safe(
-                                                [
-                                                    "git",
-                                                    "remote",
-                                                    "set-url",
-                                                    "origin",
-                                                    current_origin,
-                                                ],
-                                                check=False,
-                                            )
-                                else:
+                            if is_fork:
+                                print(
+                                    "Fork PR detected — cannot push directly. "
+                                    "Suggested changes will be shown in the PR comment."
+                                )
+                            else:
+                                try:
                                     run_command_safe(
                                         [
                                             "git",
@@ -678,11 +652,12 @@ def main():
                                         check=True,
                                     )
                                     print(f"✅ Pushed doc updates to PR branch ({pr_branch})")
-                            except subprocess.CalledProcessError as e:
-                                print(
-                                    f"Warning: Failed to push doc updates: {e}. "
-                                    "Check that GH_PAT has repo scope and the PR allows maintainer pushes."
-                                )
+                                except subprocess.CalledProcessError as e:
+                                    print(
+                                        f"Warning: Failed to push doc updates: {e}. "
+                                        "Check that GH_TOKEN has contents:write permission."
+                                    )
+                                    push_failed = True
                 else:
                     print("Separate-repo scenario: creating PR...")
                     push_and_open_pr(modified_files, commit_info)
@@ -690,18 +665,27 @@ def main():
             # Post confirmation comment for [update-docs]
             if update_mode and modified_files and not args.dry_run:
                 confirm_parts = []
-                confirm_parts.append("## 📚 Documentation Update")
+                show_as_suggestion = is_fork or push_failed
+                if show_as_suggestion:
+                    confirm_parts.append("## 📝 Suggested Documentation Changes")
+                else:
+                    confirm_parts.append("## 📚 Documentation Update")
                 confirm_parts.append("")
                 if modified_files:
-                    if previous_review and previous_review["review_found"]:
+                    if show_as_suggestion:
+                        confirm_parts.append(
+                            f"Suggested updates for **{len(modified_files)} file(s)**:"
+                        )
+                    elif previous_review and previous_review["review_found"]:
                         confirm_parts.append(
                             f"Updated **{len(modified_files)} file(s)** based on your review selections:"
                         )
                     else:
                         confirm_parts.append(f"Updated **{len(modified_files)} file(s)**:")
                     confirm_parts.append("")
+                    marker = "📄" if show_as_suggestion else "✅"
                     for f in modified_files:
-                        confirm_parts.append(f"- ✅ `{f}`")
+                        confirm_parts.append(f"- {marker} `{f}`")
                 if previous_review and previous_review.get("rejected_files"):
                     confirm_parts.append("")
                     confirm_parts.append(
@@ -746,6 +730,18 @@ def main():
                         confirm_parts.append(f"A docs PR has been created: {docs_pr_url}")
                     elif docs_subfolder and pr_merged:
                         confirm_parts.append("A docs PR has been created with these changes.")
+                    elif docs_subfolder and is_fork:
+                        confirm_parts.append(
+                            "This is a fork PR, so I can't push changes directly. "
+                            "The suggested changes are shown above for you to apply.\n\n"
+                            "Once this PR is merged, comment `[update-docs]` again "
+                            "and I'll create a docs PR with these updates."
+                        )
+                    elif docs_subfolder and push_failed:
+                        confirm_parts.append(
+                            "Failed to push doc updates to this PR. "
+                            "The suggested changes are shown above for manual application."
+                        )
                     elif docs_subfolder:
                         confirm_parts.append("Doc updates have been committed to this PR.")
                     else:
