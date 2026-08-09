@@ -80,6 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event.issue.pull_request && 
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
       (contains(github.event.comment.body, '[review-docs]') ||
        contains(github.event.comment.body, '[update-docs]') ||
        contains(github.event.comment.body, '[review-feature]'))
@@ -145,7 +146,7 @@ Add these in **Settings → Secrets → Actions**:
 | `MODEL_API_KEY` | API key for the model endpoint (leave empty if not required) |
 | `MODEL_NAME` | Model name to use (e.g., `meta-llama/Llama-3.1-8B-Instruct`, `gemini-2.0-flash`) |
 | `DOCS_REPO_URL` | Docs repository URL (e.g., `https://github.com/org/docs`) |
-| `GITHUB_TOKEN` | Built-in GitHub Actions token — no setup needed. Works for same-repo setups (`docs-subfolder`): creating docs PRs, posting review comments, and submitting index update PRs. For fork PRs, doc changes are shown as suggestions in the PR comment instead of pushed directly. **For separate docs repos** (`docs-repo-url` pointing to a different repo), use a PAT with `repo` scope instead. |
+| `GH_PAT` | _(Optional)_ GitHub PAT with `repo` scope. Only needed for **separate docs repos** (`docs-repo-url` pointing to a different repo). For same-repo setups, the built-in `GITHUB_TOKEN` works — no PAT required. |
 | `DOCS_SUBFOLDER` | _(Optional)_ Docs subfolder path (e.g., `docs`) |
 | `DOCS_BASE_BRANCH` | _(Optional)_ Base branch for docs PRs (default: `main`) |
 | `JIRA_URL` | _(Optional, for `[review-feature]`)_ Jira instance URL (e.g., `https://your-company.atlassian.net`) |
