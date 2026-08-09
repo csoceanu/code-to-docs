@@ -283,7 +283,7 @@
         <span class="yaml-key">id:</span> <span class="yaml-value">pr_info</span>
         <span class="yaml-key">if:</span> <span class="yaml-value">github.event.issue.pull_request</span>
         <span class="yaml-key">env:</span>
-          <span class="yaml-key">GH_TOKEN:</span> <span class="yaml-value">${{ secrets.GH_PAT }}</span>
+          <span class="yaml-key">GH_TOKEN:</span> <span class="yaml-value">${{ secrets.GITHUB_TOKEN }}</span>
         <span class="yaml-key">run:</span> <span class="yaml-value">|
           PR_NUMBER=${{ github.event.issue.number }}
           PR_DATA=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER)
@@ -301,7 +301,7 @@
           <span class="yaml-key">repository:</span> <span class="yaml-value">${{ steps.pr_info.outputs.head_repo || github.repository }}</span>
           <span class="yaml-key">ref:</span> <span class="yaml-value">${{ steps.pr_info.outputs.head_ref || github.ref }}</span>
           <span class="yaml-key">fetch-depth:</span> <span class="yaml-value">0</span>
-          <span class="yaml-key">token:</span> <span class="yaml-value">${{ secrets.GH_PAT }}</span>
+          <span class="yaml-key">token:</span> <span class="yaml-value">${{ secrets.GITHUB_TOKEN }}</span>
 
       - <span class="yaml-key">name:</span> <span class="yaml-value">Documentation Assistant</span>
         <span class="yaml-key">uses:</span> <span class="yaml-value">redhat-community-ai-tools/code-to-docs@main</span>
@@ -310,7 +310,7 @@
           <span class="yaml-key">model-api-key:</span> <span class="yaml-value">${{ secrets.MODEL_API_KEY }}</span>
           <span class="yaml-key">model-name:</span> <span class="yaml-value">${{ secrets.MODEL_NAME }}</span>
           <span class="yaml-key">docs-repo-url:</span> <span class="yaml-value">${{ secrets.DOCS_REPO_URL }}</span>
-          <span class="yaml-key">github-token:</span> <span class="yaml-value">${{ secrets.GH_PAT }}</span>
+          <span class="yaml-key">github-token:</span> <span class="yaml-value">${{ secrets.GITHUB_TOKEN }}</span>
           <span class="yaml-key">pr-number:</span> <span class="yaml-value">${{ github.event.issue.number }}</span>
           <span class="yaml-key">pr-base:</span> <span class="yaml-value">origin/${{ steps.pr_info.outputs.base_ref || 'main' }}</span>
           <span class="yaml-key">pr-head-sha:</span> <span class="yaml-value">${{ steps.pr_info.outputs.head_ref }}</span>
@@ -352,9 +352,9 @@
                                 <td>Docs repository URL (e.g., https://github.com/org/docs)</td>
                             </tr>
                             <tr>
-                                <td><span class="secret-name">GH_PAT</span></td>
-                                <td><span class="secret-dots">&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;</span></td>
-                                <td>GitHub token with repo + pull_requests:write permissions</td>
+                                <td><span class="secret-name">GITHUB_TOKEN</span></td>
+                                <td style="color:var(--gh-text-secondary);font-style:italic;font-size:12px;">Built-in</td>
+                                <td>Built-in GitHub Actions token (no setup needed for same-repo)</td>
                             </tr>
                             <tr>
                                 <td><span class="secret-name">DOCS_SUBFOLDER</span></td>

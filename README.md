@@ -120,7 +120,7 @@ jobs:
           model-api-key: ${{ secrets.MODEL_API_KEY }}
           model-name: ${{ secrets.MODEL_NAME }}
           docs-repo-url: ${{ secrets.DOCS_REPO_URL }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}  # For separate docs repos, use a PAT: ${{ secrets.GH_PAT }}
           pr-number: ${{ github.event.issue.number }}
           pr-base: origin/${{ steps.pr_info.outputs.base_ref || 'main' }}
           pr-head-sha: ${{ steps.pr_info.outputs.head_ref }}
