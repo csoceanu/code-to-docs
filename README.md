@@ -71,7 +71,7 @@ on:
     types: [created]
 
 permissions:
-  contents: write
+  contents: write  # Required to push doc updates to PR branches
   issues: write
   pull-requests: write
 
