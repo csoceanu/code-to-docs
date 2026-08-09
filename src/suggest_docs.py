@@ -665,13 +665,14 @@ def main():
             # Post confirmation comment for [update-docs]
             if update_mode and modified_files and not args.dry_run:
                 confirm_parts = []
-                if is_fork:
+                show_as_suggestion = is_fork or push_failed
+                if show_as_suggestion:
                     confirm_parts.append("## 📝 Suggested Documentation Changes")
                 else:
                     confirm_parts.append("## 📚 Documentation Update")
                 confirm_parts.append("")
                 if modified_files:
-                    if is_fork:
+                    if show_as_suggestion:
                         confirm_parts.append(
                             f"Suggested updates for **{len(modified_files)} file(s)**:"
                         )
@@ -682,7 +683,7 @@ def main():
                     else:
                         confirm_parts.append(f"Updated **{len(modified_files)} file(s)**:")
                     confirm_parts.append("")
-                    marker = "📄" if is_fork else "✅"
+                    marker = "📄" if show_as_suggestion else "✅"
                     for f in modified_files:
                         confirm_parts.append(f"- {marker} `{f}`")
                 if previous_review and previous_review.get("rejected_files"):
