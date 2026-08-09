@@ -619,6 +619,7 @@ def main():
                         )
                         if not pr_branch:
                             print("Warning: Could not resolve PR branch name, cannot push")
+                            push_failed = True
                         else:
                             origin_url = run_command_safe(
                                 ["git", "config", "--get", "remote.origin.url"], check=False

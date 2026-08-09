@@ -179,7 +179,7 @@ def push_and_open_pr(modified_files, commit_info=None):
         if not gh_token:
             raise ValueError("GH_TOKEN environment variable not set")
 
-        # Clear GitHub Actions default authentication that interferes with our PAT
+        # Clear GitHub Actions default authentication that interferes with GH_TOKEN
         run_command_safe(
             ["git", "config", "--unset-all", "http.https://github.com/.extraheader"],
             check=False,
