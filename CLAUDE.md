@@ -41,7 +41,7 @@ uv run ruff format src/ tests/
 - **Python 3.12+**, managed with `uv`
 - **Testing**: pytest, tests mirror source modules (`test_<module>.py`)
 - **Linting**: ruff (line length 100, see `pyproject.toml` for rules)
-- **Coverage**: minimum 60%, run with `uv run pytest --cov`
+- **Coverage**: minimum 60%, run with `uv run pytest --cov=src --cov-report=term-missing`
 
 ## Authentication
 
@@ -51,7 +51,7 @@ The action receives a single token via the `github-token` input, mapped to `GH_T
 - **Separate docs repo** (`DOCS_REPO_URL` points elsewhere): requires a PAT with `repo` scope
 - **Fork PRs**: cannot push to fork branches — shows suggested changes as diffs in a PR comment
 
-Tokens are never logged or interpolated into strings. `security_utils.sanitize_output()` scrubs `GH_TOKEN` and `MODEL_API_KEY` from all output.
+Tokens are never logged or interpolated into strings. `security_utils.sanitize_output()` scrubs `GH_TOKEN`, `MODEL_API_KEY`, `JIRA_API_TOKEN`, and `GOOGLE_SA_KEY` from all output.
 
 ## Environment variables
 
@@ -68,8 +68,15 @@ Set by the GitHub Action via `action.yml`:
 | `DOCS_BASE_BRANCH` | No | Base branch for docs PRs (default: `main`) |
 | `PR_NUMBER` | No | PR number being analyzed |
 | `PR_BASE` | No | Base ref for diff (default: `origin/main`) |
+| `PR_HEAD_SHA` | No | Head SHA for the PR |
 | `COMMENT_BODY` | No | Comment text containing the command |
 | `STYLE_CONFIG_PATH` | No | Path to style guidelines file |
+| `DRY_RUN` | No | If `true`, simulate changes without writing or pushing |
+| `JIRA_URL` | No | Jira instance URL (for `[review-feature]`) |
+| `JIRA_USERNAME` | No | Jira username/email (for `[review-feature]`) |
+| `JIRA_API_TOKEN` | No | Jira API token (for `[review-feature]`) |
+| `GOOGLE_SA_KEY` | No | Google service account JSON key for fetching Google Docs |
+| `MAX_CONTEXT_CHARS` | No | Max chars for LLM prompt content (default: 400000) |
 
 ## Command flows
 
