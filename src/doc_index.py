@@ -241,7 +241,8 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
         docs_root: Optional root path for docs. If None, uses get_docs_root()
 
     Returns:
-        dict: File path to SHA256 hash mapping, or None if ref is unavailable
+        dict: File path to SHA256 hash mapping. None if ref is unavailable,
+              empty dict if folder has no doc files on the ref.
     """
     if docs_root is None:
         docs_root = get_docs_root()
@@ -258,8 +259,10 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
         ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
         check=False,
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    if result.returncode != 0:
         return None
+    if not result.stdout.strip():
+        return {}
 
     doc_extensions = (".md", ".rst", ".adoc")
     hashes = {}
@@ -284,19 +287,15 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
             if str(Path(rel_to_docs).parent) != folder:
                 continue
 
-        # Binary subprocess for consistent hashing with hash_file()
-        try:
-            content_result = subprocess.run(
-                ["git", "cat-file", "blob", f"{ref}:{file_path}"],
-                capture_output=True,
-            )
-            if content_result.returncode == 0 and content_result.stdout:
-                file_hash = hashlib.sha256(content_result.stdout).hexdigest()
-                hashes[rel_to_docs] = file_hash
-        except Exception as e:
-            print(f"Warning: Could not read {file_path} from {ref}: {sanitize_output(str(e))}")
+        content_result = run_command_safe(
+            ["git", "show", f"{ref}:{file_path}"],
+            check=False,
+        )
+        if content_result.returncode == 0 and content_result.stdout:
+            file_hash = hashlib.sha256(content_result.stdout.encode("utf-8")).hexdigest()
+            hashes[rel_to_docs] = file_hash
 
-    return hashes if hashes else None
+    return hashes
 
 
 def folder_needs_reindex(folder, manifest, docs_root=None):
@@ -417,8 +416,8 @@ def _get_docs_content_from_ref(folder):
     """
     Read doc file content from the base branch ref.
 
-    Returns a list of {"path": str, "content": str} dicts, or None
-    if the ref is unavailable.
+    Returns a list of {"path": str, "content": str} dicts. None if ref is
+    unavailable, empty list if folder has no doc files on the ref.
     """
     ref = _get_base_branch_ref()
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
@@ -432,8 +431,10 @@ def _get_docs_content_from_ref(folder):
         ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
         check=False,
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    if result.returncode != 0:
         return None
+    if not result.stdout.strip():
+        return []
 
     doc_extensions = (".md", ".rst", ".adoc")
     docs_content = []
@@ -464,7 +465,7 @@ def _get_docs_content_from_ref(folder):
         if content_result.returncode == 0 and content_result.stdout:
             docs_content.append({"path": rel_to_docs, "content": content_result.stdout})
 
-    return docs_content if docs_content else None
+    return docs_content
 
 
 def build_index_for_folder(folder, client=None):
@@ -499,7 +500,7 @@ def build_index_for_folder(folder, client=None):
 
     if ref_available:
         docs_content = _get_docs_content_from_ref(folder)
-        if docs_content is None:
+        if not docs_content:
             print(f"Skipping {folder} (not found on {ref})")
             return None
     else:

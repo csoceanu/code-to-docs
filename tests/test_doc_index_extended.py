@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 sys.modules.setdefault("openai", MagicMock())
 
@@ -189,7 +189,8 @@ class TestFolderNeedsReindex:
         index_file = index_dir / "guides-operations.index.md"
         index_file.write_text("# Index for guides/operations")
 
-        assert folder_needs_reindex("guides/operations", manifest, doc_tree) is False
+        with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=None):
+            assert folder_needs_reindex("guides/operations", manifest, doc_tree) is False
 
     def test_changed_file_needs_reindex(self, doc_tree):
         hashes = get_folder_doc_hashes("guides/operations", doc_tree)
@@ -200,7 +201,8 @@ class TestFolderNeedsReindex:
         index_file.write_text("# Index for guides/operations")
 
         (doc_tree / "guides" / "operations" / "health-checks.rst").write_text("UPDATED CONTENT")
-        assert folder_needs_reindex("guides/operations", manifest, doc_tree) is True
+        with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=None):
+            assert folder_needs_reindex("guides/operations", manifest, doc_tree) is True
 
 
 # ── save_index / load_index ──────────────────────────────────────────────────

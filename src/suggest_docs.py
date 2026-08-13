@@ -446,7 +446,7 @@ def main():
     docs_pr_failed = False
     docs_branch = None
     pr_branch_info = None
-    if update_mode and docs_subfolder:
+    if (update_mode or review_mode) and docs_subfolder:
         pr_branch_info = _resolve_pr_push_target(pr_number)
         _, _, pr_merged = pr_branch_info
         if pr_merged:

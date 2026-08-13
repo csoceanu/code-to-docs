@@ -285,19 +285,27 @@ class TestFolderNeedsReindex:
 
 
 class TestGetFolderDocHashesFromRef:
+    @staticmethod
+    def _mock_run_calls(ls_output, file_content):
+        """Return a side_effect function for run_command_safe that handles ls-tree + git show."""
+        call_count = [0]
+
+        def side_effect(cmd, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return MagicMock(returncode=0, stdout=ls_output)
+            return MagicMock(returncode=0, stdout=file_content)
+
+        return side_effect
+
     def test_returns_hashes_from_git_ref(self, monkeypatch):
         monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
         ls_output = "guides/setup.md\nguides/intro.rst\nguides/.hidden/skip.md\n"
-        file_content = b"doc content"
-        expected_hash = hashlib.sha256(file_content).hexdigest()
+        file_content = "doc content"
+        expected_hash = hashlib.sha256(file_content.encode("utf-8")).hexdigest()
 
-        with (
-            patch("doc_index.run_command_safe") as mock_run,
-            patch("doc_index.subprocess.run") as mock_subprocess,
-        ):
-            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
-            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
-
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.side_effect = self._mock_run_calls(ls_output, file_content)
             result = get_folder_doc_hashes_from_ref("guides")
 
         assert result is not None
@@ -314,56 +322,49 @@ class TestGetFolderDocHashesFromRef:
 
         assert result is None
 
+    def test_returns_empty_dict_when_no_files(self, monkeypatch):
+        monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
+
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
+            result = get_folder_doc_hashes_from_ref("guides")
+
+        assert result == {}
+
     def test_handles_docs_subfolder(self, monkeypatch):
         monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
         ls_output = "docs/commands/export.md\n"
-        file_content = b"export docs"
+        file_content = "export docs"
 
-        with (
-            patch("doc_index.run_command_safe") as mock_run,
-            patch("doc_index.subprocess.run") as mock_subprocess,
-        ):
-            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
-            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
-
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.side_effect = self._mock_run_calls(ls_output, file_content)
             result = get_folder_doc_hashes_from_ref("commands")
 
         assert result is not None
-        # Key should be relative to docs root (subfolder stripped)
         assert "commands/export.md" in result
 
     def test_uses_custom_base_branch(self, monkeypatch):
         monkeypatch.setenv("DOCS_BASE_BRANCH", "develop")
         monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
 
-        with (
-            patch("doc_index.run_command_safe") as mock_run,
-            patch("doc_index.subprocess.run") as mock_subprocess,
-        ):
-            mock_run.return_value = MagicMock(returncode=0, stdout="guides/setup.md\n")
-            mock_subprocess.return_value = MagicMock(returncode=0, stdout=b"content")
-
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.side_effect = self._mock_run_calls("guides/setup.md\n", "content")
             get_folder_doc_hashes_from_ref("guides")
 
         ls_call = mock_run.call_args_list[0].args[0]
         assert "origin/develop" in ls_call
-        cat_call = mock_subprocess.call_args_list[0].args[0]
-        assert "origin/develop:guides/setup.md" in cat_call
+        show_call = mock_run.call_args_list[1].args[0]
+        assert "origin/develop:guides/setup.md" in show_call
 
     def test_root_level_folder_excludes_subdirectory_files(self, monkeypatch):
         from doc_index import ROOT_LEVEL_FOLDER
 
         monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
         ls_output = "README.md\noverview.rst\nguides/setup.md\ncommands/export.md\n"
-        file_content = b"root content"
+        file_content = "root content"
 
-        with (
-            patch("doc_index.run_command_safe") as mock_run,
-            patch("doc_index.subprocess.run") as mock_subprocess,
-        ):
-            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
-            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
-
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.side_effect = self._mock_run_calls(ls_output, file_content)
             result = get_folder_doc_hashes_from_ref(ROOT_LEVEL_FOLDER)
 
         assert result is not None
@@ -375,15 +376,10 @@ class TestGetFolderDocHashesFromRef:
     def test_folder_excludes_files_from_other_folders(self, monkeypatch):
         monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
         ls_output = "guides/setup.md\nguides/ops/health.md\ncommands/export.md\n"
-        file_content = b"content"
+        file_content = "content"
 
-        with (
-            patch("doc_index.run_command_safe") as mock_run,
-            patch("doc_index.subprocess.run") as mock_subprocess,
-        ):
-            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
-            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
-
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.side_effect = self._mock_run_calls(ls_output, file_content)
             result = get_folder_doc_hashes_from_ref("guides")
 
         assert result is not None
