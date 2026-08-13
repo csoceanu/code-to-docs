@@ -109,7 +109,7 @@ Requires `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN` secrets. Optionally u
 Semantic indexes speed up doc file discovery by caching LLM-generated summaries of documentation folders. Key functions:
 
 - `fetch_indexes_from_main()` — fetches cached indexes from the base branch
-- `folder_needs_reindex()` — compares SHA256 doc hashes to detect changes
+- `folder_needs_reindex()` — compares SHA256 doc hashes against `origin/main` (via `get_folder_doc_hashes_from_ref`) to detect changes, with fallback to disk hashes
 - `build_all_indexes()` / `update_indexes_if_needed()` — regenerate via LLM only for changed folders
 - `commit_indexes_to_repo()` — pushes indexes to a persistent `code-to-docs/update-indexes` branch and creates/updates a PR
 

@@ -202,7 +202,7 @@ def save_manifest(manifest, docs_root=None):
 
 def get_folder_doc_hashes(folder, docs_root=None):
     """
-    Get hashes of all docs in a folder.
+    Get hashes of all docs in a folder from disk.
 
     Args:
         folder: Folder name relative to docs root
@@ -222,9 +222,95 @@ def get_folder_doc_hashes(folder, docs_root=None):
     return hashes
 
 
+def _get_base_branch_ref():
+    """Get the git ref for the base branch (e.g., origin/main)."""
+    base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
+    return f"origin/{base_branch}"
+
+
+def get_folder_doc_hashes_from_ref(folder, docs_root=None):
+    """
+    Get hashes of docs in a folder from the base branch git ref.
+
+    Uses git to read file content from origin/main instead of disk,
+    so that index hash comparisons are always against the base branch
+    even when running on a fork PR branch.
+
+    Args:
+        folder: Folder name relative to docs root, or ROOT_LEVEL_FOLDER
+        docs_root: Optional root path for docs. If None, uses get_docs_root()
+
+    Returns:
+        dict: File path to SHA256 hash mapping. None if ref is unavailable,
+              empty dict if folder has no doc files on the ref.
+    """
+    if docs_root is None:
+        docs_root = get_docs_root()
+
+    ref = _get_base_branch_ref()
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+
+    if folder == ROOT_LEVEL_FOLDER:
+        search_path = docs_subfolder or "."
+    else:
+        search_path = f"{docs_subfolder}/{folder}" if docs_subfolder else folder
+
+    result = run_command_safe(
+        ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    if not result.stdout.strip():
+        return {}
+
+    doc_extensions = (".md", ".rst", ".adoc")
+    hashes = {}
+
+    for file_path in result.stdout.strip().split("\n"):
+        if not any(file_path.endswith(ext) for ext in doc_extensions):
+            continue
+
+        rel_to_docs = file_path
+        if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
+            rel_to_docs = file_path[len(docs_subfolder) + 1 :]
+
+        parts = Path(rel_to_docs).parent.parts
+        if any(p.startswith(".") or p.startswith("_") for p in parts):
+            continue
+
+        # Match disk-based get_docs_in_folder behavior: non-recursive
+        if folder == ROOT_LEVEL_FOLDER:
+            if len(Path(rel_to_docs).parts) > 1:
+                continue
+        else:
+            if str(Path(rel_to_docs).parent) != folder:
+                continue
+
+        # Binary subprocess for byte-identical hashing with hash_file().
+        # run_command_safe uses text=True which applies universal newline
+        # translation (\r\n → \n), breaking hash consistency for CRLF files.
+        try:
+            content_result = subprocess.run(
+                ["git", "cat-file", "blob", f"{ref}:{file_path}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            if content_result.returncode == 0 and content_result.stdout:
+                file_hash = hashlib.sha256(content_result.stdout).hexdigest()
+                hashes[rel_to_docs] = file_hash
+        except Exception as e:
+            print(f"Warning: Could not read {file_path} from {ref}: {sanitize_output(str(e))}")
+
+    return hashes
+
+
 def folder_needs_reindex(folder, manifest, docs_root=None):
     """
     Check if a folder needs its index regenerated.
+
+    Compares stored hashes against the base branch (origin/main) to ensure
+    consistent results regardless of which branch the tool runs on.
 
     Args:
         folder: Folder name
@@ -239,7 +325,10 @@ def folder_needs_reindex(folder, manifest, docs_root=None):
         return True
 
     stored_hashes = manifest["folders"][folder].get("doc_hashes", {})
-    current_hashes = get_folder_doc_hashes(folder, docs_root)
+    ref_hashes = get_folder_doc_hashes_from_ref(folder, docs_root)
+    current_hashes = (
+        ref_hashes if ref_hashes is not None else get_folder_doc_hashes(folder, docs_root)
+    )
 
     return stored_hashes != current_hashes
 
@@ -330,9 +419,69 @@ def _batch_docs_by_budget(docs_content, budget, prompt_overhead):
     return batches
 
 
+def _get_docs_content_from_ref(folder):
+    """
+    Read doc file content from the base branch ref.
+
+    Returns a list of {"path": str, "content": str} dicts. None if ref is
+    unavailable, empty list if folder has no doc files on the ref.
+    """
+    ref = _get_base_branch_ref()
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+
+    if folder == ROOT_LEVEL_FOLDER:
+        search_path = docs_subfolder or "."
+    else:
+        search_path = f"{docs_subfolder}/{folder}" if docs_subfolder else folder
+
+    result = run_command_safe(
+        ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    if not result.stdout.strip():
+        return []
+
+    doc_extensions = (".md", ".rst", ".adoc")
+    docs_content = []
+
+    for file_path in result.stdout.strip().split("\n"):
+        if not any(file_path.endswith(ext) for ext in doc_extensions):
+            continue
+
+        rel_to_docs = file_path
+        if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
+            rel_to_docs = file_path[len(docs_subfolder) + 1 :]
+
+        parts = Path(rel_to_docs).parent.parts
+        if any(p.startswith(".") or p.startswith("_") for p in parts):
+            continue
+
+        if folder == ROOT_LEVEL_FOLDER:
+            if len(Path(rel_to_docs).parts) > 1:
+                continue
+        else:
+            if str(Path(rel_to_docs).parent) != folder:
+                continue
+
+        content_result = run_command_safe(
+            ["git", "show", f"{ref}:{file_path}"],
+            check=False,
+        )
+        if content_result.returncode == 0 and content_result.stdout:
+            docs_content.append({"path": rel_to_docs, "content": content_result.stdout})
+
+    return docs_content
+
+
 def build_index_for_folder(folder, client=None):
     """
     Build a semantic index for a documentation folder.
+
+    Reads doc content from origin/main when available so that indexes
+    always reflect the base branch, even when running on a fork PR.
+    Falls back to reading from disk if the ref is unavailable.
 
     If all files fit within the context budget at full content, processes in a
     single API call. Otherwise, batches files into groups that fit the budget,
@@ -347,18 +496,35 @@ def build_index_for_folder(folder, client=None):
     if client is None:
         client = get_client()
 
-    docs = get_docs_in_folder(folder)
-    if not docs:
-        return None
+    # Read content from origin/main so indexes always reflect the base branch.
+    # If the folder doesn't exist on main (e.g., added by a fork PR), skip it —
+    # it will be indexed after the PR merges.
+    # Falls back to disk only when git ref is entirely unavailable (e.g., local runs).
+    ref = _get_base_branch_ref()
+    ref_available = (
+        run_command_safe(["git", "rev-parse", "--verify", ref], check=False).returncode == 0
+    )
 
-    # Gather content from all docs in the folder
-    docs_content = []
-    for doc in docs:
-        try:
-            content = doc.read_text(encoding="utf-8")
-            docs_content.append({"path": str(doc), "content": content})
-        except Exception as e:
-            print(f"Warning: Could not read {doc}: {sanitize_output(str(e))}")
+    if ref_available:
+        docs_content = _get_docs_content_from_ref(folder)
+        if docs_content is None:
+            print(f"Skipping {folder} (not found on {ref})")
+            return None
+        if not docs_content:
+            print(f"Skipping {folder} (no doc files on {ref})")
+            return None
+    else:
+        docs = get_docs_in_folder(folder)
+        if not docs:
+            return None
+
+        docs_content = []
+        for doc in docs:
+            try:
+                content = doc.read_text(encoding="utf-8")
+                docs_content.append({"path": str(doc), "content": content})
+            except Exception as e:
+                print(f"Warning: Could not read {doc}: {sanitize_output(str(e))}")
 
     if not docs_content:
         return None
@@ -591,9 +757,12 @@ def build_all_indexes(force=False):
                 index_content = future.result()
                 if index_content:
                     save_index(folder, index_content)
+                    ref_hashes = get_folder_doc_hashes_from_ref(folder)
                     manifest["folders"][folder] = {
                         "built": datetime.now().isoformat(),
-                        "doc_hashes": get_folder_doc_hashes(folder),
+                        "doc_hashes": ref_hashes
+                        if ref_hashes is not None
+                        else get_folder_doc_hashes(folder),
                     }
                     results[folder] = "success"
                     print(f"✅ Built index for {folder}")
@@ -628,9 +797,12 @@ def update_indexes_if_needed():
             index_content = build_index_for_folder_with_retry(folder, client)
             if index_content:
                 save_index(folder, index_content)
+                ref_hashes = get_folder_doc_hashes_from_ref(folder)
                 manifest["folders"][folder] = {
                     "built": datetime.now().isoformat(),
-                    "doc_hashes": get_folder_doc_hashes(folder),
+                    "doc_hashes": ref_hashes
+                    if ref_hashes is not None
+                    else get_folder_doc_hashes(folder),
                 }
                 updated_folders.append(folder)
                 print(f"✅ Updated index for {folder}")
