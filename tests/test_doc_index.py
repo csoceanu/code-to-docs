@@ -291,8 +291,10 @@ class TestGetFolderDocHashesFromRef:
         file_content = b"doc content"
         expected_hash = hashlib.sha256(file_content).hexdigest()
 
-        with patch("doc_index.run_command_safe") as mock_run, \
-             patch("doc_index.subprocess.run") as mock_subprocess:
+        with (
+            patch("doc_index.run_command_safe") as mock_run,
+            patch("doc_index.subprocess.run") as mock_subprocess,
+        ):
             mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
             mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
 
@@ -317,8 +319,10 @@ class TestGetFolderDocHashesFromRef:
         ls_output = "docs/commands/export.md\n"
         file_content = b"export docs"
 
-        with patch("doc_index.run_command_safe") as mock_run, \
-             patch("doc_index.subprocess.run") as mock_subprocess:
+        with (
+            patch("doc_index.run_command_safe") as mock_run,
+            patch("doc_index.subprocess.run") as mock_subprocess,
+        ):
             mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
             mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
 
@@ -332,8 +336,10 @@ class TestGetFolderDocHashesFromRef:
         monkeypatch.setenv("DOCS_BASE_BRANCH", "develop")
         monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
 
-        with patch("doc_index.run_command_safe") as mock_run, \
-             patch("doc_index.subprocess.run") as mock_subprocess:
+        with (
+            patch("doc_index.run_command_safe") as mock_run,
+            patch("doc_index.subprocess.run") as mock_subprocess,
+        ):
             mock_run.return_value = MagicMock(returncode=0, stdout="guides/setup.md\n")
             mock_subprocess.return_value = MagicMock(returncode=0, stdout=b"content")
 

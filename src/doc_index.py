@@ -265,7 +265,7 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
 
         rel_to_docs = file_path
         if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
-            rel_to_docs = file_path[len(docs_subfolder) + 1:]
+            rel_to_docs = file_path[len(docs_subfolder) + 1 :]
 
         parts = Path(rel_to_docs).parent.parts
         if any(p.startswith(".") or p.startswith("_") for p in parts):
@@ -304,7 +304,9 @@ def folder_needs_reindex(folder, manifest, docs_root=None):
 
     stored_hashes = manifest["folders"][folder].get("doc_hashes", {})
     ref_hashes = get_folder_doc_hashes_from_ref(folder, docs_root)
-    current_hashes = ref_hashes if ref_hashes is not None else get_folder_doc_hashes(folder, docs_root)
+    current_hashes = (
+        ref_hashes if ref_hashes is not None else get_folder_doc_hashes(folder, docs_root)
+    )
 
     return stored_hashes != current_hashes
 
@@ -659,7 +661,9 @@ def build_all_indexes(force=False):
                     ref_hashes = get_folder_doc_hashes_from_ref(folder)
                     manifest["folders"][folder] = {
                         "built": datetime.now().isoformat(),
-                        "doc_hashes": ref_hashes if ref_hashes is not None else get_folder_doc_hashes(folder),
+                        "doc_hashes": ref_hashes
+                        if ref_hashes is not None
+                        else get_folder_doc_hashes(folder),
                     }
                     results[folder] = "success"
                     print(f"✅ Built index for {folder}")
@@ -697,7 +701,9 @@ def update_indexes_if_needed():
                 ref_hashes = get_folder_doc_hashes_from_ref(folder)
                 manifest["folders"][folder] = {
                     "built": datetime.now().isoformat(),
-                    "doc_hashes": ref_hashes if ref_hashes is not None else get_folder_doc_hashes(folder),
+                    "doc_hashes": ref_hashes
+                    if ref_hashes is not None
+                    else get_folder_doc_hashes(folder),
                 }
                 updated_folders.append(folder)
                 print(f"✅ Updated index for {folder}")
