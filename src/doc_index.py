@@ -287,13 +287,19 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
             if str(Path(rel_to_docs).parent) != folder:
                 continue
 
-        content_result = run_command_safe(
-            ["git", "show", f"{ref}:{file_path}"],
-            check=False,
-        )
-        if content_result.returncode == 0 and content_result.stdout:
-            file_hash = hashlib.sha256(content_result.stdout.encode("utf-8")).hexdigest()
-            hashes[rel_to_docs] = file_hash
+        # Binary subprocess for byte-identical hashing with hash_file().
+        # run_command_safe uses text=True which applies universal newline
+        # translation (\r\n → \n), breaking hash consistency for CRLF files.
+        try:
+            content_result = subprocess.run(
+                ["git", "cat-file", "blob", f"{ref}:{file_path}"],
+                capture_output=True,
+            )
+            if content_result.returncode == 0 and content_result.stdout:
+                file_hash = hashlib.sha256(content_result.stdout).hexdigest()
+                hashes[rel_to_docs] = file_hash
+        except Exception as e:
+            print(f"Warning: Could not read {file_path} from {ref}: {sanitize_output(str(e))}")
 
     return hashes
 
