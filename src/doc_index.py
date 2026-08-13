@@ -236,7 +236,12 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
     so that index hash comparisons are always against the base branch
     even when running on a fork PR branch.
 
-    Returns None if the ref is not available (falls back to disk hashes).
+    Args:
+        folder: Folder name relative to docs root, or ROOT_LEVEL_FOLDER
+        docs_root: Optional root path for docs. If None, uses get_docs_root()
+
+    Returns:
+        dict: File path to SHA256 hash mapping, or None if ref is unavailable
     """
     if docs_root is None:
         docs_root = get_docs_root()
@@ -271,14 +276,25 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
         if any(p.startswith(".") or p.startswith("_") for p in parts):
             continue
 
-        # Read binary content from the ref for consistent hashing
-        content_result = subprocess.run(
-            ["git", "cat-file", "blob", f"{ref}:{file_path}"],
-            capture_output=True,
-        )
-        if content_result.returncode == 0 and content_result.stdout:
-            file_hash = hashlib.sha256(content_result.stdout).hexdigest()
-            hashes[rel_to_docs] = file_hash
+        # Match disk-based get_docs_in_folder behavior: non-recursive
+        if folder == ROOT_LEVEL_FOLDER:
+            if len(Path(rel_to_docs).parts) > 1:
+                continue
+        else:
+            if str(Path(rel_to_docs).parent) != folder:
+                continue
+
+        # Binary subprocess for consistent hashing with hash_file()
+        try:
+            content_result = subprocess.run(
+                ["git", "cat-file", "blob", f"{ref}:{file_path}"],
+                capture_output=True,
+            )
+            if content_result.returncode == 0 and content_result.stdout:
+                file_hash = hashlib.sha256(content_result.stdout).hexdigest()
+                hashes[rel_to_docs] = file_hash
+        except Exception as e:
+            print(f"Warning: Could not read {file_path} from {ref}: {sanitize_output(str(e))}")
 
     return hashes if hashes else None
 

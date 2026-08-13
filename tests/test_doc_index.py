@@ -350,6 +350,47 @@ class TestGetFolderDocHashesFromRef:
         cat_call = mock_subprocess.call_args_list[0].args[0]
         assert "origin/develop:guides/setup.md" in cat_call
 
+    def test_root_level_folder_excludes_subdirectory_files(self, monkeypatch):
+        from doc_index import ROOT_LEVEL_FOLDER
+
+        monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
+        ls_output = "README.md\noverview.rst\nguides/setup.md\ncommands/export.md\n"
+        file_content = b"root content"
+
+        with (
+            patch("doc_index.run_command_safe") as mock_run,
+            patch("doc_index.subprocess.run") as mock_subprocess,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
+
+            result = get_folder_doc_hashes_from_ref(ROOT_LEVEL_FOLDER)
+
+        assert result is not None
+        assert "README.md" in result
+        assert "overview.rst" in result
+        assert "guides/setup.md" not in result
+        assert "commands/export.md" not in result
+
+    def test_folder_excludes_files_from_other_folders(self, monkeypatch):
+        monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
+        ls_output = "guides/setup.md\nguides/ops/health.md\ncommands/export.md\n"
+        file_content = b"content"
+
+        with (
+            patch("doc_index.run_command_safe") as mock_run,
+            patch("doc_index.subprocess.run") as mock_subprocess,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
+
+            result = get_folder_doc_hashes_from_ref("guides")
+
+        assert result is not None
+        assert "guides/setup.md" in result
+        assert "guides/ops/health.md" not in result
+        assert "commands/export.md" not in result
+
 
 # ── Index save/load ──────────────────────────────────────────────────────────
 
