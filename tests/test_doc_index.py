@@ -245,7 +245,8 @@ class TestFolderNeedsReindex:
         manifest = {"folders": {"guides": {"doc_hashes": hashes}}}
         # Index file must exist for the folder to be considered up-to-date
         save_index("guides", "dummy index content", docs_root=doc_tree)
-        assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is False
+        with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=None):
+            assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is False
 
     def test_changed_file_triggers_reindex(self, doc_tree):
         hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
@@ -253,7 +254,8 @@ class TestFolderNeedsReindex:
 
         # Modify a file
         (doc_tree / "guides" / "operations" / "health-checks.rst").write_text("CHANGED")
-        assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
+        with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=None):
+            assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
 
     def test_added_file_triggers_reindex(self, doc_tree):
         hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
@@ -261,7 +263,8 @@ class TestFolderNeedsReindex:
 
         # Add a new file
         (doc_tree / "guides" / "operations" / "new-doc.rst").write_text("New content")
-        assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
+        with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=None):
+            assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
 
     def test_uses_ref_hashes_over_disk(self, doc_tree):
         """When ref hashes are available, folder_needs_reindex uses them instead of disk."""

@@ -293,7 +293,8 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
         try:
             content_result = subprocess.run(
                 ["git", "cat-file", "blob", f"{ref}:{file_path}"],
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
             )
             if content_result.returncode == 0 and content_result.stdout:
                 file_hash = hashlib.sha256(content_result.stdout).hexdigest()
