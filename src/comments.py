@@ -427,13 +427,13 @@ def post_review_comment(
         comment_parts.append("- **Uncheck** any files above that you don't want updated")
         if not include_full_content:
             comment_parts.append(
-                "- When ready, comment `[\u200bupdate-docs]` to generate a PR with only the checked files"
+                "- When ready, comment `&#91;update-docs]` to generate a PR with only the checked files"
             )
         else:
             comment_parts.append(
-                "- When ready, comment `[\u200bupdate-docs]` to create a PR with only the checked files"
+                "- When ready, comment `&#91;update-docs]` to create a PR with only the checked files"
             )
-        comment_parts.append("- You can add instructions in your `[\u200bupdate-docs]` comment:")
+        comment_parts.append("- You can add instructions in your `&#91;update-docs]` comment:")
         comment_parts.append(
             "  - **Global** (first line): `[\u200bupdate-docs] keep changes minimal, don't add new sections`"
         )
