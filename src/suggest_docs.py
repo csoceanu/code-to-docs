@@ -471,7 +471,9 @@ def main():
                     print(f"Checked out {docs_subfolder} from {base_branch} for merged PR review")
                 os.chdir(docs_subfolder)
             except (subprocess.CalledProcessError, OSError) as e:
-                print(f"Warning: Failed to checkout docs from {base_branch}: {sanitize_output(str(e))}")
+                print(
+                    f"Warning: Failed to checkout docs from {base_branch}: {sanitize_output(str(e))}"
+                )
                 pr_merged = False
                 try:
                     os.chdir(docs_subfolder)
