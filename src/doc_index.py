@@ -507,8 +507,11 @@ def build_index_for_folder(folder, client=None):
 
     if ref_available:
         docs_content = _get_docs_content_from_ref(folder)
-        if not docs_content:
+        if docs_content is None:
             print(f"Skipping {folder} (not found on {ref})")
+            return None
+        if not docs_content:
+            print(f"Skipping {folder} (no doc files on {ref})")
             return None
     else:
         docs = get_docs_in_folder(folder)

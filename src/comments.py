@@ -440,7 +440,7 @@ def post_review_comment(
             "  - **Global** (first line): <code>&#91;update-docs] keep changes minimal, don't add new sections</code>"
         )
         comment_parts.append(
-            "  - **Per-file** (next lines): `config-ref.rst: only update the CLI usage example`"
+            "  - **Per-file** (next lines): <code>config-ref.rst: only update the CLI usage example</code>"
         )
         comment_parts.append("")
         comment_parts.append("*Powered by code-to-docs AI* \u2728")
