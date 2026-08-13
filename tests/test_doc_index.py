@@ -15,6 +15,7 @@ from doc_index import (
     get_docs_in_folder,
     get_docs_root,
     get_folder_doc_hashes,
+    get_folder_doc_hashes_from_ref,
     get_or_generate_summary,
     get_summaries_dir,
     get_summary_filename,
@@ -261,6 +262,87 @@ class TestFolderNeedsReindex:
         # Add a new file
         (doc_tree / "guides" / "operations" / "new-doc.rst").write_text("New content")
         assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
+
+    def test_uses_ref_hashes_over_disk(self, doc_tree):
+        """When ref hashes are available, folder_needs_reindex uses them instead of disk."""
+        disk_hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
+        ref_hashes = {"guides/operations/health-checks.rst": "different_hash_from_main"}
+        manifest = {"folders": {"guides": {"doc_hashes": disk_hashes}}}
+        save_index("guides", "dummy index content", docs_root=doc_tree)
+
+        # Disk hashes match manifest, but ref hashes differ → should trigger reindex
+        with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=ref_hashes):
+            assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is True
+
+    def test_falls_back_to_disk_when_ref_unavailable(self, doc_tree):
+        """When ref hashes return None, falls back to disk hashes."""
+        hashes = get_folder_doc_hashes("guides", docs_root=doc_tree)
+        manifest = {"folders": {"guides": {"doc_hashes": hashes}}}
+        save_index("guides", "dummy index content", docs_root=doc_tree)
+
+        with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=None):
+            assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is False
+
+
+class TestGetFolderDocHashesFromRef:
+    def test_returns_hashes_from_git_ref(self, monkeypatch):
+        monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
+        ls_output = "guides/setup.md\nguides/intro.rst\nguides/.hidden/skip.md\n"
+        file_content = b"doc content"
+        expected_hash = hashlib.sha256(file_content).hexdigest()
+
+        with patch("doc_index.run_command_safe") as mock_run, \
+             patch("doc_index.subprocess.run") as mock_subprocess:
+            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
+
+            result = get_folder_doc_hashes_from_ref("guides")
+
+        assert result is not None
+        assert result["guides/setup.md"] == expected_hash
+        assert result["guides/intro.rst"] == expected_hash
+        assert "guides/.hidden/skip.md" not in result
+
+    def test_returns_none_when_git_fails(self, monkeypatch):
+        monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
+
+        with patch("doc_index.run_command_safe") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="")
+            result = get_folder_doc_hashes_from_ref("guides")
+
+        assert result is None
+
+    def test_handles_docs_subfolder(self, monkeypatch):
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        ls_output = "docs/commands/export.md\n"
+        file_content = b"export docs"
+
+        with patch("doc_index.run_command_safe") as mock_run, \
+             patch("doc_index.subprocess.run") as mock_subprocess:
+            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
+
+            result = get_folder_doc_hashes_from_ref("commands")
+
+        assert result is not None
+        # Key should be relative to docs root (subfolder stripped)
+        assert "commands/export.md" in result
+
+    def test_uses_custom_base_branch(self, monkeypatch):
+        monkeypatch.setenv("DOCS_BASE_BRANCH", "develop")
+        monkeypatch.delenv("DOCS_SUBFOLDER", raising=False)
+
+        with patch("doc_index.run_command_safe") as mock_run, \
+             patch("doc_index.subprocess.run") as mock_subprocess:
+            mock_run.return_value = MagicMock(returncode=0, stdout="guides/setup.md\n")
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout=b"content")
+
+            get_folder_doc_hashes_from_ref("guides")
+
+        ls_call = mock_run.call_args_list[0].args[0]
+        assert "origin/develop" in ls_call
+        cat_call = mock_subprocess.call_args_list[0].args[0]
+        assert "origin/develop:guides/setup.md" in cat_call
 
 
 # ── Index save/load ──────────────────────────────────────────────────────────

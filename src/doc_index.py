@@ -202,7 +202,7 @@ def save_manifest(manifest, docs_root=None):
 
 def get_folder_doc_hashes(folder, docs_root=None):
     """
-    Get hashes of all docs in a folder.
+    Get hashes of all docs in a folder from disk.
 
     Args:
         folder: Folder name relative to docs root
@@ -222,9 +222,73 @@ def get_folder_doc_hashes(folder, docs_root=None):
     return hashes
 
 
+def _get_base_branch_ref():
+    """Get the git ref for the base branch (e.g., origin/main)."""
+    base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
+    return f"origin/{base_branch}"
+
+
+def get_folder_doc_hashes_from_ref(folder, docs_root=None):
+    """
+    Get hashes of docs in a folder from the base branch git ref.
+
+    Uses git to read file content from origin/main instead of disk,
+    so that index hash comparisons are always against the base branch
+    even when running on a fork PR branch.
+
+    Returns None if the ref is not available (falls back to disk hashes).
+    """
+    if docs_root is None:
+        docs_root = get_docs_root()
+
+    ref = _get_base_branch_ref()
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+
+    if folder == ROOT_LEVEL_FOLDER:
+        search_path = docs_subfolder or "."
+    else:
+        search_path = f"{docs_subfolder}/{folder}" if docs_subfolder else folder
+
+    result = run_command_safe(
+        ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    doc_extensions = (".md", ".rst", ".adoc")
+    hashes = {}
+
+    for file_path in result.stdout.strip().split("\n"):
+        if not any(file_path.endswith(ext) for ext in doc_extensions):
+            continue
+
+        rel_to_docs = file_path
+        if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
+            rel_to_docs = file_path[len(docs_subfolder) + 1:]
+
+        parts = Path(rel_to_docs).parent.parts
+        if any(p.startswith(".") or p.startswith("_") for p in parts):
+            continue
+
+        # Read binary content from the ref for consistent hashing
+        content_result = subprocess.run(
+            ["git", "cat-file", "blob", f"{ref}:{file_path}"],
+            capture_output=True,
+        )
+        if content_result.returncode == 0 and content_result.stdout:
+            file_hash = hashlib.sha256(content_result.stdout).hexdigest()
+            hashes[rel_to_docs] = file_hash
+
+    return hashes if hashes else None
+
+
 def folder_needs_reindex(folder, manifest, docs_root=None):
     """
     Check if a folder needs its index regenerated.
+
+    Compares stored hashes against the base branch (origin/main) to ensure
+    consistent results regardless of which branch the tool runs on.
 
     Args:
         folder: Folder name
@@ -239,7 +303,8 @@ def folder_needs_reindex(folder, manifest, docs_root=None):
         return True
 
     stored_hashes = manifest["folders"][folder].get("doc_hashes", {})
-    current_hashes = get_folder_doc_hashes(folder, docs_root)
+    ref_hashes = get_folder_doc_hashes_from_ref(folder, docs_root)
+    current_hashes = ref_hashes if ref_hashes is not None else get_folder_doc_hashes(folder, docs_root)
 
     return stored_hashes != current_hashes
 
@@ -591,9 +656,10 @@ def build_all_indexes(force=False):
                 index_content = future.result()
                 if index_content:
                     save_index(folder, index_content)
+                    ref_hashes = get_folder_doc_hashes_from_ref(folder)
                     manifest["folders"][folder] = {
                         "built": datetime.now().isoformat(),
-                        "doc_hashes": get_folder_doc_hashes(folder),
+                        "doc_hashes": ref_hashes if ref_hashes is not None else get_folder_doc_hashes(folder),
                     }
                     results[folder] = "success"
                     print(f"✅ Built index for {folder}")
@@ -628,9 +694,10 @@ def update_indexes_if_needed():
             index_content = build_index_for_folder_with_retry(folder, client)
             if index_content:
                 save_index(folder, index_content)
+                ref_hashes = get_folder_doc_hashes_from_ref(folder)
                 manifest["folders"][folder] = {
                     "built": datetime.now().isoformat(),
-                    "doc_hashes": get_folder_doc_hashes(folder),
+                    "doc_hashes": ref_hashes if ref_hashes is not None else get_folder_doc_hashes(folder),
                 }
                 updated_folders.append(folder)
                 print(f"✅ Updated index for {folder}")

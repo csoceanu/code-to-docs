@@ -113,7 +113,15 @@ jobs:
           ref: ${{ steps.pr_info.outputs.head_ref || github.ref }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-          
+
+      - name: Rebind Origin to Main Repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git remote set-url origin "https://github.com/${{ github.repository }}.git"
+          git config --local http.https://github.com/.extraheader \
+            "AUTHORIZATION: basic $(echo -n "x-access-token:${GH_TOKEN}" | base64)"
+
       - name: Documentation Assistant
         uses: redhat-community-ai-tools/code-to-docs@main
         with:
