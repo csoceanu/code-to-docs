@@ -413,9 +413,67 @@ def _batch_docs_by_budget(docs_content, budget, prompt_overhead):
     return batches
 
 
+def _get_docs_content_from_ref(folder):
+    """
+    Read doc file content from the base branch ref.
+
+    Returns a list of {"path": str, "content": str} dicts, or None
+    if the ref is unavailable.
+    """
+    ref = _get_base_branch_ref()
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+
+    if folder == ROOT_LEVEL_FOLDER:
+        search_path = docs_subfolder or "."
+    else:
+        search_path = f"{docs_subfolder}/{folder}" if docs_subfolder else folder
+
+    result = run_command_safe(
+        ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    doc_extensions = (".md", ".rst", ".adoc")
+    docs_content = []
+
+    for file_path in result.stdout.strip().split("\n"):
+        if not any(file_path.endswith(ext) for ext in doc_extensions):
+            continue
+
+        rel_to_docs = file_path
+        if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
+            rel_to_docs = file_path[len(docs_subfolder) + 1 :]
+
+        parts = Path(rel_to_docs).parent.parts
+        if any(p.startswith(".") or p.startswith("_") for p in parts):
+            continue
+
+        if folder == ROOT_LEVEL_FOLDER:
+            if len(Path(rel_to_docs).parts) > 1:
+                continue
+        else:
+            if str(Path(rel_to_docs).parent) != folder:
+                continue
+
+        content_result = run_command_safe(
+            ["git", "show", f"{ref}:{file_path}"],
+            check=False,
+        )
+        if content_result.returncode == 0 and content_result.stdout:
+            docs_content.append({"path": rel_to_docs, "content": content_result.stdout})
+
+    return docs_content if docs_content else None
+
+
 def build_index_for_folder(folder, client=None):
     """
     Build a semantic index for a documentation folder.
+
+    Reads doc content from origin/main when available so that indexes
+    always reflect the base branch, even when running on a fork PR.
+    Falls back to reading from disk if the ref is unavailable.
 
     If all files fit within the context budget at full content, processes in a
     single API call. Otherwise, batches files into groups that fit the budget,
@@ -430,18 +488,32 @@ def build_index_for_folder(folder, client=None):
     if client is None:
         client = get_client()
 
-    docs = get_docs_in_folder(folder)
-    if not docs:
-        return None
+    # Read content from origin/main so indexes always reflect the base branch.
+    # If the folder doesn't exist on main (e.g., added by a fork PR), skip it —
+    # it will be indexed after the PR merges.
+    # Falls back to disk only when git ref is entirely unavailable (e.g., local runs).
+    ref = _get_base_branch_ref()
+    ref_available = (
+        run_command_safe(["git", "rev-parse", "--verify", ref], check=False).returncode == 0
+    )
 
-    # Gather content from all docs in the folder
-    docs_content = []
-    for doc in docs:
-        try:
-            content = doc.read_text(encoding="utf-8")
-            docs_content.append({"path": str(doc), "content": content})
-        except Exception as e:
-            print(f"Warning: Could not read {doc}: {sanitize_output(str(e))}")
+    if ref_available:
+        docs_content = _get_docs_content_from_ref(folder)
+        if docs_content is None:
+            print(f"Skipping {folder} (not found on {ref})")
+            return None
+    else:
+        docs = get_docs_in_folder(folder)
+        if not docs:
+            return None
+
+        docs_content = []
+        for doc in docs:
+            try:
+                content = doc.read_text(encoding="utf-8")
+                docs_content.append({"path": str(doc), "content": content})
+            except Exception as e:
+                print(f"Warning: Could not read {doc}: {sanitize_output(str(e))}")
 
     if not docs_content:
         return None
