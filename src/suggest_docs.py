@@ -53,7 +53,7 @@ from jira_integration import (
     format_feature_review_section,
     parse_feature_command,
 )
-from security_utils import run_command_safe
+from security_utils import run_command_safe, sanitize_output
 
 _GITHUB_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
@@ -435,9 +435,10 @@ def main():
         print("Failed to set up docs environment")
         return
 
-    # For merged PRs in same-repo mode, switch to a clean branch from main
-    # BEFORE discovery/generation so the pipeline runs against main's docs
-    # and file writes land on the correct branch.
+    # For merged PRs in same-repo mode, switch to main's docs content
+    # BEFORE discovery/generation so the pipeline runs against main's docs.
+    # update_mode creates a branch (needs to push); review_mode does a
+    # read-only checkout of the docs subfolder.
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER")
     pr_merged = False
     is_fork = False
@@ -451,18 +452,26 @@ def main():
         _, _, pr_merged = pr_branch_info
         if pr_merged:
             base_branch = os.environ.get("DOCS_BASE_BRANCH") or "main"
-            docs_branch = f"docs/update-from-pr-{pr_number}"
             try:
                 os.chdir("..")
                 run_command_safe(["git", "fetch", "origin", base_branch], check=False)
-                run_command_safe(["git", "fetch", "origin", docs_branch], check=False)
-                run_command_safe(
-                    ["git", "checkout", "-B", docs_branch, f"origin/{base_branch}"], check=True
-                )
+                if update_mode:
+                    docs_branch = f"docs/update-from-pr-{pr_number}"
+                    run_command_safe(["git", "fetch", "origin", docs_branch], check=False)
+                    run_command_safe(
+                        ["git", "checkout", "-B", docs_branch, f"origin/{base_branch}"],
+                        check=True,
+                    )
+                    print(f"Switched to {docs_branch} (based on {base_branch}) for merged PR")
+                else:
+                    run_command_safe(
+                        ["git", "checkout", f"origin/{base_branch}", "--", docs_subfolder],
+                        check=True,
+                    )
+                    print(f"Checked out {docs_subfolder} from {base_branch} for merged PR review")
                 os.chdir(docs_subfolder)
-                print(f"Switched to {docs_branch} (based on {base_branch}) for merged PR")
             except (subprocess.CalledProcessError, OSError) as e:
-                print(f"Warning: Failed to create docs branch from {base_branch}: {e}")
+                print(f"Warning: Failed to checkout docs from {base_branch}: {sanitize_output(str(e))}")
                 pr_merged = False
                 try:
                     os.chdir(docs_subfolder)
