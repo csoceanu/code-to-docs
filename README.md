@@ -120,7 +120,7 @@ jobs:
         run: |
           git remote set-url origin "https://github.com/${{ github.repository }}.git"
           git config --local http.https://github.com/.extraheader \
-            "AUTHORIZATION: basic $(echo -n "x-access-token:${GH_TOKEN}" | base64)"
+            "AUTHORIZATION: basic $(echo -n "x-access-token:${GH_TOKEN}" | base64 -w 0)"
 
       - name: Documentation Assistant
         uses: redhat-community-ai-tools/code-to-docs@main
