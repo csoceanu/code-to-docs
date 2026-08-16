@@ -18,9 +18,7 @@ class TestLoadRepoConfig:
         config_data = {"pr-title-prefix": ":book:"}
 
         with patch("config.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout=json.dumps(config_data)
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(config_data))
             result = config.load_repo_config()
 
         assert result == config_data
@@ -32,9 +30,7 @@ class TestLoadRepoConfig:
         config_data = {"pr-title-prefix": ":seedling:"}
 
         with patch("config.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout=json.dumps(config_data)
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(config_data))
             result = config.load_repo_config()
 
         assert result == config_data
@@ -64,9 +60,7 @@ class TestLoadRepoConfig:
         config_data = {"pr-title-prefix": ":book:"}
 
         with patch("config.run_command_safe") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout=json.dumps(config_data)
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(config_data))
             result1 = config.load_repo_config()
             result2 = config.load_repo_config()
 
