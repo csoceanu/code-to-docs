@@ -136,13 +136,15 @@ def parse_update_instructions(comment_body):
     """
     Parse global and per-file instructions from an [update-docs] comment.
 
-    Supports two forms:
-      [update-docs] global instruction here
-      pools.rst: only update the set-quota usage line
+    Supports multi-line global instructions with interspersed per-file instructions:
+      [update-docs] keep changes minimal, here are usage examples:
+      ## Example usage
+      some-command --flag value
+      pools.rst: only update the CLI usage line
       health-checks.rst: don't modify existing sections
 
-    The first line after [update-docs] is the global instruction.
-    Subsequent lines matching "<filename>: <instruction>" are per-file.
+    Lines matching "<filename>: <instruction>" are per-file.
+    All other lines are global instructions passed to the LLM.
 
     Args:
         comment_body: The full comment text
@@ -167,22 +169,22 @@ def parse_update_instructions(comment_body):
     # Match lines where the part before ":" looks like a doc file path
     file_pattern = re.compile(r"^([\w./_-]*\.(?:rst|md|adoc))\s*:\s*(.+)$", re.IGNORECASE)
 
-    # First line is global instructions, unless it matches the per-file pattern
-    first_line = lines[0].strip()
-    first_match = file_pattern.match(first_line)
-    if first_match:
-        file_instructions[first_match.group(1).strip()] = first_match.group(2).strip()
-    else:
-        global_instructions = first_line
-
-    # Remaining lines: check for per-file instructions
-    for line in lines[1:]:
-        line = line.strip()
-        if not line:
+    # Separate per-file instructions from global instructions.
+    # Lines matching "filename.ext: instruction" are per-file.
+    # All other lines are global instructions (preserving multi-line content).
+    global_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            global_lines.append("")
             continue
-        file_match = file_pattern.match(line)
+        file_match = file_pattern.match(stripped)
         if file_match:
             file_instructions[file_match.group(1).strip()] = file_match.group(2).strip()
+        else:
+            global_lines.append(stripped)
+
+    global_instructions = "\n".join(global_lines).strip()
 
     if global_instructions:
         print(f"Global instructions: {global_instructions}")
