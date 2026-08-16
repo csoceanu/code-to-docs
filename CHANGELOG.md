@@ -22,8 +22,6 @@ this release captures the current feature set for stable pinning.
 - Semantic folder indexes for faster file discovery
 - Persistent style guidelines via `.code-to-docs/style.md`
 - Repository configuration via `.code-to-docs/config.json`
-- Post-generation validation: diff-based preservation check and independent
-  LLM verification to prevent unrelated content deletion
 - Interactive review with checkboxes for accepting/rejecting file suggestions
 - Fork PR detection with suggested-changes fallback
 - Per-file and global reviewer instructions in `[update-docs]` comments
