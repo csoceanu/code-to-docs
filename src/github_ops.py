@@ -162,7 +162,7 @@ def push_and_open_pr(modified_files, commit_info=None):
     try:
         run_command_safe(["git", "add"] + modified_files, check=True)
 
-        commit_msg = f"{get_pr_title_prefix()}docs: update documentation from code changes"
+        commit_msg = f"{get_pr_title_prefix()}Auto-generated doc updates from code changes"
         if commit_info:
             if "pr_number" in commit_info:
                 commit_msg += f"\n\nPR Link: {commit_info['pr_url']}"
@@ -229,7 +229,7 @@ def push_and_open_pr(modified_files, commit_info=None):
                     "pr",
                     "create",
                     "--title",
-                    f"{get_pr_title_prefix()}docs: update documentation from code changes",
+                    f"{get_pr_title_prefix()}Auto-Generated Doc Updates from Code PR",
                     "--body",
                     pr_body,
                     "--base",

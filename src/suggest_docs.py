@@ -607,8 +607,9 @@ def main():
                         for f in modified_files
                     ]
 
-                    prefix = get_pr_title_prefix()
-                    commit_msg = f"{prefix}docs: update documentation based on code changes"
+                    commit_msg = (
+                        f"{get_pr_title_prefix()}docs: update documentation based on code changes"
+                    )
                     if commit_info:
                         commit_msg += "\n\nAssisted-by: code-to-docs AI"
 

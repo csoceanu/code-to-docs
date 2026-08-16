@@ -65,7 +65,8 @@ class TestLoadRepoConfig:
             result2 = config.load_repo_config()
 
         assert result1 == result2
-        assert mock_run.call_count == 1
+        # First call: git fetch + git show = 2 calls. Second call: cached, 0 calls.
+        assert mock_run.call_count == 2
 
 
 class TestGetPrTitlePrefix:

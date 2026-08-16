@@ -224,13 +224,20 @@ def load_repo_config():
         if ".." in path.split("/") or path.startswith("/"):
             return _repo_config_cache
 
+        run_command_safe(["git", "fetch", "origin", base_branch], check=False)
+
         result = run_command_safe(
             ["git", "show", f"origin/{base_branch}:{path}"],
             check=False,
         )
         if result.returncode == 0 and result.stdout.strip():
             _repo_config_cache = json.loads(result.stdout.strip())
-            print(f"Loaded repo config from {base_branch}:{path}")
+            print(
+                f"Loaded repo config from {base_branch}:{path}"
+                f" ({len(result.stdout.strip()):,} chars)"
+            )
+        elif result.returncode == 0 and not result.stdout.strip():
+            print(f"Warning: Repo config '{path}' on {base_branch} is empty, skipping")
     except json.JSONDecodeError as e:
         print(f"Warning: Invalid JSON in {_REPO_CONFIG_PATH}: {e}")
     except Exception as e:
@@ -245,7 +252,10 @@ def get_pr_title_prefix():
     Returns the prefix with a trailing space if set, empty string otherwise.
     """
     config = load_repo_config()
-    prefix = config.get("pr-title-prefix", "").strip()
+    raw = config.get("pr-title-prefix", "")
+    if not isinstance(raw, str):
+        return ""
+    prefix = raw.strip()
     return f"{prefix} " if prefix else ""
 
 
