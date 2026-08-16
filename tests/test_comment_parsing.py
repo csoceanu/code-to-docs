@@ -158,6 +158,26 @@ class TestParseUpdateInstructions:
         # Line outside code fence is per-file
         assert "real-file.rst" in file_inst
 
+    def test_tilde_code_fence_preserves_file_pattern(self):
+        comment = (
+            "[update-docs] here is an example:\n"
+            "~~~\n"
+            "pools.rst: example usage\n"
+            "~~~\n"
+            "health-checks.rst: update the CLI section"
+        )
+        global_inst, file_inst = parse_update_instructions(comment)
+        assert "pools.rst: example usage" in global_inst
+        assert "pools.rst" not in file_inst
+        assert "health-checks.rst" in file_inst
+        assert file_inst["health-checks.rst"] == "update the CLI section"
+
+    def test_tilde_code_fence_with_language_specifier(self):
+        comment = "[update-docs] see this example:\n~~~rst\nconfig.rst: some directive\n~~~\n"
+        global_inst, file_inst = parse_update_instructions(comment)
+        assert "config.rst: some directive" in global_inst
+        assert "config.rst" not in file_inst
+
     def test_unclosed_code_fence_treats_rest_as_global(self):
         comment = (
             "[update-docs] some context:\n"
