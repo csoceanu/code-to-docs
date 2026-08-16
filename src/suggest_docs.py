@@ -32,6 +32,7 @@ from config import (
     get_client,
     get_max_context_chars,
     get_model_name,
+    get_pr_title_prefix,
     load_style_config_from_branch,
 )
 from discovery import (
@@ -187,7 +188,7 @@ def _push_docs_pr_for_merged(pr_number, docs_branch, docs_files, gh_token):
                 "pr",
                 "create",
                 "--title",
-                f"docs: update documentation from PR #{pr_number}",
+                f"{get_pr_title_prefix()}docs: update documentation from PR #{pr_number}",
                 "--body",
                 pr_body,
                 "--base",
@@ -606,7 +607,8 @@ def main():
                         for f in modified_files
                     ]
 
-                    commit_msg = "docs: update documentation based on code changes"
+                    prefix = get_pr_title_prefix()
+                    commit_msg = f"{prefix}docs: update documentation based on code changes"
                     if commit_info:
                         commit_msg += "\n\nAssisted-by: code-to-docs AI"
 

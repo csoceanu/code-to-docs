@@ -48,6 +48,29 @@ The action auto-detects this file. To use a custom path instead, set the `style-
 
 Per-comment instructions (`[update-docs] keep changes minimal`) continue to work alongside the persistent config, appearing as additional guidance after the style guidelines. If per-comment or per-file instructions contradict the style guidelines, the reviewer's instructions take precedence.
 
+## Repository Configuration
+
+You can configure code-to-docs behavior with a JSON config file in your repository root:
+
+- **`.code-to-docs/config.json`** — Tool settings (loaded from the base branch, not the PR branch)
+
+**Supported settings:**
+
+| Key | Description | Example |
+|-----|-------------|---------|
+| `pr-title-prefix` | Prefix prepended to all PR titles and commit messages created by the tool | `":book:"` |
+
+**Example `.code-to-docs/config.json`:**
+```json
+{
+  "pr-title-prefix": ":book:"
+}
+```
+
+With this config, generated PRs will be titled `:book: docs: update documentation from PR #123` instead of `docs: update documentation from PR #123`.
+
+This file is optional — if missing, the tool uses default titles with no prefix.
+
 ## How It Works
 
 1. **Triggered by PR Comments** - When someone comments `[review-docs]`, `[update-docs]`, or `[review-feature]` on a Pull Request
