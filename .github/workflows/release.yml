@@ -32,11 +32,14 @@ jobs:
 
       - name: Extract changelog section
         id: changelog
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          version="${{ steps.version.outputs.tag }}"
-          version="${version#v}"
+          version="${TAG#v}"
+          # Escape dots for awk regex
+          escaped=$(echo "$version" | sed 's/\./\\./g')
           # Extract the section for this version from CHANGELOG.md
-          section=$(awk "/^## \[${version}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
+          section=$(awk "/^## \[${escaped}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
           if [ -z "$section" ]; then
             section="Release ${version}"
           fi
@@ -48,13 +51,17 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          NOTES: ${{ steps.changelog.outputs.body }}
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --title "${{ steps.version.outputs.tag }}" \
-            --notes "${{ steps.changelog.outputs.body }}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "$NOTES"
 
       - name: Update major version tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          major=$(echo "${{ steps.version.outputs.tag }}" | grep -oP '^v\d+')
+          major=$(echo "$TAG" | grep -oP '^v\d+')
           git tag -f "$major"
           git push -f origin "$major"
