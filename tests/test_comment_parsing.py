@@ -86,7 +86,7 @@ class TestParseUpdateInstructions:
             "\n"
             "## Per-Stage Flags\n"
             "```bash\n"
-            "my-tool --stage-flag 'Plugin={\"key\": \"value\"}'\n"
+            'my-tool --stage-flag \'Plugin={"key": "value"}\'\n'
             "```\n"
             "pools.rst: only update the CLI section\n"
             "health.md: don't modify existing sections"
@@ -107,7 +107,7 @@ class TestParseUpdateInstructions:
             "\n"
             "Here are usage examples for context:\n"
             "```bash\n"
-            "my-tool --optional-flags '{\"key\": \"value\"}'\n"
+            'my-tool --optional-flags \'{"key": "value"}\'\n'
             "```"
         )
         global_inst, file_inst = parse_update_instructions(comment)
