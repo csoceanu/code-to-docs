@@ -75,6 +75,47 @@ class TestParseUpdateInstructions:
         global_inst, file_inst = parse_update_instructions(comment)
         assert global_inst == "global instruction"
 
+    def test_multiline_global_instructions(self):
+        comment = (
+            "[update-docs] Take into account these usage examples:\n"
+            "\n"
+            "## Global Flags\n"
+            "```bash\n"
+            "my-tool --flag value\n"
+            "```\n"
+            "\n"
+            "## Per-Stage Flags\n"
+            "```bash\n"
+            'my-tool --stage-flag \'Plugin={"key": "value"}\'\n'
+            "```\n"
+            "pools.rst: only update the CLI section\n"
+            "health.md: don't modify existing sections"
+        )
+        global_inst, file_inst = parse_update_instructions(comment)
+        assert "Take into account these usage examples:" in global_inst
+        assert "## Global Flags" in global_inst
+        assert "my-tool --flag value" in global_inst
+        assert "## Per-Stage Flags" in global_inst
+        assert file_inst == {
+            "pools.rst": "only update the CLI section",
+            "health.md": "don't modify existing sections",
+        }
+
+    def test_multiline_global_without_per_file(self):
+        comment = (
+            "[update-docs] keep changes minimal\n"
+            "\n"
+            "Here are usage examples for context:\n"
+            "```bash\n"
+            'my-tool --optional-flags \'{"key": "value"}\'\n'
+            "```"
+        )
+        global_inst, file_inst = parse_update_instructions(comment)
+        assert "keep changes minimal" in global_inst
+        assert "usage examples" in global_inst
+        assert "my-tool --optional-flags" in global_inst
+        assert file_inst == {}
+
 
 # ── _resolve_file_instructions ───────────────────────────────────────────────
 

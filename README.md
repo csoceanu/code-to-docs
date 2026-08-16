@@ -20,10 +20,14 @@ Comment on any Pull Request:
 2. Uncheck any files you don't want updated
 3. Comment `[update-docs]` to create a PR with only the checked files
 
-You can guide how the AI generates doc updates by adding instructions in your `[update-docs]` comment — global on the first line, per-file on subsequent lines:
+You can guide how the AI generates doc updates by adding instructions in your `[update-docs]` comment. Lines matching `filename.ext: instruction` are per-file instructions; all other lines are global instructions passed to the LLM:
 
 ```
-[update-docs] keep changes minimal
+[update-docs] keep changes minimal, here are usage examples for context:
+
+## Example usage
+my-tool --flag value
+
 config-ref.rst: only update the CLI usage example
 ```
 
