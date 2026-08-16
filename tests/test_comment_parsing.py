@@ -116,6 +116,61 @@ class TestParseUpdateInstructions:
         assert "my-tool --optional-flags" in global_inst
         assert file_inst == {}
 
+    def test_file_pattern_inside_code_fence_preserved_as_global(self):
+        comment = (
+            "[update-docs] here is an example:\n"
+            "```\n"
+            "pools.rst: example usage\n"
+            "```\n"
+            "health-checks.rst: update the CLI section"
+        )
+        global_inst, file_inst = parse_update_instructions(comment)
+        # Line inside code fence must stay in global instructions
+        assert "pools.rst: example usage" in global_inst
+        assert "pools.rst" not in file_inst
+        # Line outside code fence still works as per-file
+        assert "health-checks.rst" in file_inst
+        assert file_inst["health-checks.rst"] == "update the CLI section"
+
+    def test_code_fence_with_language_specifier(self):
+        comment = "[update-docs] see this example:\n```rst\nconfig.rst: some directive\n```\n"
+        global_inst, file_inst = parse_update_instructions(comment)
+        assert "config.rst: some directive" in global_inst
+        assert "config.rst" not in file_inst
+
+    def test_multiple_code_fences(self):
+        comment = (
+            "[update-docs] examples below:\n"
+            "```\n"
+            "guide.md: first example\n"
+            "```\n"
+            "real-file.rst: update this section\n"
+            "```\n"
+            "api.adoc: second example\n"
+            "```\n"
+        )
+        global_inst, file_inst = parse_update_instructions(comment)
+        # Lines inside code fences stay in global
+        assert "guide.md: first example" in global_inst
+        assert "api.adoc: second example" in global_inst
+        assert "guide.md" not in file_inst
+        assert "api.adoc" not in file_inst
+        # Line outside code fence is per-file
+        assert "real-file.rst" in file_inst
+
+    def test_unclosed_code_fence_treats_rest_as_global(self):
+        comment = (
+            "[update-docs] some context:\n"
+            "```\n"
+            "pools.rst: example inside unclosed fence\n"
+            "config.md: another example\n"
+        )
+        global_inst, file_inst = parse_update_instructions(comment)
+        # All lines after unclosed fence stay in global
+        assert "pools.rst: example inside unclosed fence" in global_inst
+        assert "config.md: another example" in global_inst
+        assert file_inst == {}
+
 
 # ── _resolve_file_instructions ───────────────────────────────────────────────
 

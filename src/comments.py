@@ -172,11 +172,23 @@ def parse_update_instructions(comment_body):
     # Separate per-file instructions from global instructions.
     # Lines matching "filename.ext: instruction" are per-file.
     # All other lines are global instructions (preserving multi-line content).
+    # Lines inside fenced code blocks (``` ... ```) are always treated as global
+    # to avoid misclassifying example filenames as per-file instructions.
     global_lines = []
+    in_code_fence = False
     for line in lines:
         stripped = line.strip()
         if not stripped:
             global_lines.append("")
+            continue
+        # Toggle code fence state on lines starting with triple backticks
+        # (handles language specifiers like ```python)
+        if stripped.startswith("```"):
+            in_code_fence = not in_code_fence
+            global_lines.append(stripped)
+            continue
+        if in_code_fence:
+            global_lines.append(stripped)
             continue
         file_match = file_pattern.match(stripped)
         if file_match:
