@@ -88,3 +88,11 @@ class TestGetPrTitlePrefix:
     def test_strips_whitespace_from_prefix(self):
         config._repo_config_cache = {"pr-title-prefix": "  :book:  "}
         assert config.get_pr_title_prefix() == ":book: "
+
+    def test_non_string_prefix_returns_empty(self):
+        config._repo_config_cache = {"pr-title-prefix": 42}
+        assert config.get_pr_title_prefix() == ""
+
+    def test_list_prefix_returns_empty(self):
+        config._repo_config_cache = {"pr-title-prefix": [":book:"]}
+        assert config.get_pr_title_prefix() == ""
