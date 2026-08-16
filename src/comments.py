@@ -439,7 +439,7 @@ def post_review_comment(
             "- You can add instructions in your <code>&#91;update-docs]</code> comment:"
         )
         comment_parts.append(
-            "  - **Global** (first line): <code>&#91;update-docs] keep changes minimal, don't add new sections</code>"
+            "  - **Global**: <code>&#91;update-docs] keep changes minimal, don't add new sections</code>"
         )
         comment_parts.append(
             "  - **Per-file** (next lines): <code>config-ref.rst: only update the CLI usage example</code>"
