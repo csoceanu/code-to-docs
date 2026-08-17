@@ -332,6 +332,25 @@ class TestGetFolderDocHashesFromRef:
         file_content = b"export docs"
 
         with (
+            patch("doc_index._get_effective_subfolder", return_value="docs"),
+            patch("doc_index.run_command_safe") as mock_run,
+            patch("doc_index.subprocess.run") as mock_subprocess,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
+            result = get_folder_doc_hashes_from_ref("commands")
+
+        assert result is not None
+        assert "commands/export.md" in result
+
+    def test_handles_docs_subfolder_from_inside(self, monkeypatch):
+        """When CWD is inside the docs subfolder, pathspecs omit the prefix."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        ls_output = "commands/export.md\n"
+        file_content = b"export docs"
+
+        with (
+            patch("doc_index._get_effective_subfolder", return_value=""),
             patch("doc_index.run_command_safe") as mock_run,
             patch("doc_index.subprocess.run") as mock_subprocess,
         ):
@@ -357,7 +376,7 @@ class TestGetFolderDocHashesFromRef:
         ls_call = mock_run.call_args_list[0].args[0]
         assert "origin/develop" in ls_call
         cat_call = mock_subprocess.call_args_list[0].args[0]
-        assert "origin/develop:guides/setup.md" in cat_call
+        assert "origin/develop:./guides/setup.md" in cat_call
 
     def test_root_level_folder_excludes_subdirectory_files(self, monkeypatch):
         from doc_index import ROOT_LEVEL_FOLDER
@@ -452,7 +471,10 @@ class TestGetDocsContentFromRef:
                 return MagicMock(returncode=0, stdout=ls_output)
             return MagicMock(returncode=0, stdout="export content")
 
-        with patch("doc_index.run_command_safe", side_effect=mock_run):
+        with (
+            patch("doc_index._get_effective_subfolder", return_value="docs"),
+            patch("doc_index.run_command_safe", side_effect=mock_run),
+        ):
             result = _get_docs_content_from_ref("commands")
 
         assert len(result) == 1

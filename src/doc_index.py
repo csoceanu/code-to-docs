@@ -229,6 +229,27 @@ def _get_base_branch_ref():
     return f"origin/{base_branch}"
 
 
+def _get_effective_subfolder():
+    """Get the DOCS_SUBFOLDER for git pathspecs, accounting for CWD.
+
+    When CWD is already inside the docs subfolder (after
+    setup_docs_environment), the subfolder prefix must be omitted from
+    git pathspecs because they are CWD-relative.
+
+    Uses ``git rev-parse --show-prefix`` to determine CWD's position
+    within the repo, avoiding filesystem heuristics.
+    """
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+    if not docs_subfolder:
+        return ""
+    result = run_command_safe(["git", "rev-parse", "--show-prefix"], check=False)
+    if result.returncode == 0:
+        prefix = result.stdout.strip().rstrip("/")
+        if prefix == docs_subfolder:
+            return ""
+    return docs_subfolder
+
+
 def get_folder_doc_hashes_from_ref(folder, docs_root=None):
     """
     Get hashes of docs in a folder from the base branch git ref.
@@ -249,12 +270,12 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
         docs_root = get_docs_root()
 
     ref = _get_base_branch_ref()
-    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+    subfolder = _get_effective_subfolder()
 
     if folder == ROOT_LEVEL_FOLDER:
-        search_path = docs_subfolder or "."
+        search_path = subfolder or "."
     else:
-        search_path = f"{docs_subfolder}/{folder}" if docs_subfolder else folder
+        search_path = f"{subfolder}/{folder}" if subfolder else folder
 
     result = run_command_safe(
         ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
@@ -273,8 +294,8 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
             continue
 
         rel_to_docs = file_path
-        if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
-            rel_to_docs = file_path[len(docs_subfolder) + 1 :]
+        if subfolder and file_path.startswith(subfolder + "/"):
+            rel_to_docs = file_path[len(subfolder) + 1 :]
 
         parts = Path(rel_to_docs).parent.parts
         if any(p.startswith(".") or p.startswith("_") for p in parts):
@@ -293,7 +314,7 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
         # translation (\r\n → \n), breaking hash consistency for CRLF files.
         try:
             content_result = subprocess.run(
-                ["git", "cat-file", "blob", f"{ref}:{file_path}"],
+                ["git", "cat-file", "blob", f"{ref}:./{file_path}"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
@@ -428,12 +449,12 @@ def _get_docs_content_from_ref(folder):
     unavailable, empty list if folder has no doc files on the ref.
     """
     ref = _get_base_branch_ref()
-    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+    subfolder = _get_effective_subfolder()
 
     if folder == ROOT_LEVEL_FOLDER:
-        search_path = docs_subfolder or "."
+        search_path = subfolder or "."
     else:
-        search_path = f"{docs_subfolder}/{folder}" if docs_subfolder else folder
+        search_path = f"{subfolder}/{folder}" if subfolder else folder
 
     result = run_command_safe(
         ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
@@ -452,8 +473,8 @@ def _get_docs_content_from_ref(folder):
             continue
 
         rel_to_docs = file_path
-        if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
-            rel_to_docs = file_path[len(docs_subfolder) + 1 :]
+        if subfolder and file_path.startswith(subfolder + "/"):
+            rel_to_docs = file_path[len(subfolder) + 1 :]
 
         parts = Path(rel_to_docs).parent.parts
         if any(p.startswith(".") or p.startswith("_") for p in parts):
@@ -467,7 +488,7 @@ def _get_docs_content_from_ref(folder):
                 continue
 
         content_result = run_command_safe(
-            ["git", "show", f"{ref}:{file_path}"],
+            ["git", "show", f"{ref}:./{file_path}"],
             check=False,
         )
         if content_result.returncode == 0 and content_result.stdout:
