@@ -242,27 +242,22 @@ def _get_effective_subfolder():
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
     if not docs_subfolder:
         return ""
-    should_log = not getattr(_get_effective_subfolder, "_logged", False)
     result = run_command_safe(["git", "rev-parse", "--show-prefix"], check=False)
     if result.returncode == 0:
         prefix = result.stdout.strip().rstrip("/")
         if prefix == docs_subfolder:
-            if should_log:
-                print(
-                    f"CWD inside DOCS_SUBFOLDER ({docs_subfolder}), omitting prefix from pathspecs"
-                )
-                _get_effective_subfolder._logged = True
-            return ""
-        if should_log:
-            print(f"CWD prefix '{prefix}' != DOCS_SUBFOLDER '{docs_subfolder}', keeping prefix")
-            _get_effective_subfolder._logged = True
+            effective = ""
+            msg = f"CWD inside DOCS_SUBFOLDER ({docs_subfolder}), omitting prefix from pathspecs"
+        else:
+            effective = docs_subfolder
+            msg = f"CWD prefix '{prefix}' != DOCS_SUBFOLDER '{docs_subfolder}', keeping prefix"
     else:
-        if should_log:
-            print(
-                f"git rev-parse --show-prefix failed (rc={result.returncode}), using DOCS_SUBFOLDER"
-            )
-            _get_effective_subfolder._logged = True
-    return docs_subfolder
+        effective = docs_subfolder
+        msg = f"git rev-parse --show-prefix failed (rc={result.returncode}), using DOCS_SUBFOLDER"
+    if msg != getattr(_get_effective_subfolder, "_last_msg", None):
+        print(msg)
+        _get_effective_subfolder._last_msg = msg
+    return effective
 
 
 def get_folder_doc_hashes_from_ref(folder, docs_root=None):
@@ -745,7 +740,7 @@ def _handle_empty_folder_on_ref(folder, manifest, docs_root=None):
         return False
 
     removed = remove_index(folder, docs_root)
-    manifest["folders"][folder] = {
+    manifest.setdefault("folders", {})[folder] = {
         "built": datetime.now().isoformat(),
         "doc_hashes": {},
     }

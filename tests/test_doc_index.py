@@ -563,13 +563,10 @@ class TestHandleEmptyFolderOnRef:
 
     def _mock_ref_valid(self):
         """Mock run_command_safe so git rev-parse --verify succeeds."""
-        original = None
 
         def side_effect(cmd, **kwargs):
             if "rev-parse" in cmd and "--verify" in cmd:
                 return MagicMock(returncode=0)
-            if original:
-                return original(cmd, **kwargs)
             return MagicMock(returncode=0, stdout="")
 
         return side_effect
