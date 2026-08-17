@@ -234,14 +234,20 @@ def _get_effective_subfolder():
 
     When CWD is already inside the docs subfolder (after
     setup_docs_environment), the subfolder prefix must be omitted from
-    git ls-tree pathspecs because they are CWD-relative.
+    git pathspecs because they are CWD-relative.
+
+    Uses ``git rev-parse --show-prefix`` to determine CWD's position
+    within the repo, avoiding filesystem heuristics.
     """
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
     if not docs_subfolder:
         return ""
-    if Path(docs_subfolder).exists() and Path(docs_subfolder).is_dir():
-        return docs_subfolder
-    return ""
+    result = run_command_safe(["git", "rev-parse", "--show-prefix"], check=False)
+    if result.returncode == 0:
+        prefix = result.stdout.strip().rstrip("/")
+        if prefix == docs_subfolder:
+            return ""
+    return docs_subfolder
 
 
 def get_folder_doc_hashes_from_ref(folder, docs_root=None):
