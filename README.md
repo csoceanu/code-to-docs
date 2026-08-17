@@ -150,7 +150,7 @@ jobs:
             "AUTHORIZATION: basic $(echo -n "x-access-token:${GH_TOKEN}" | base64 -w 0)"
 
       - name: Documentation Assistant
-        uses: redhat-community-ai-tools/code-to-docs@main
+        uses: redhat-community-ai-tools/code-to-docs@v0
         with:
           model-api-base: ${{ secrets.MODEL_API_BASE }}
           model-api-key: ${{ secrets.MODEL_API_KEY }}
@@ -197,6 +197,12 @@ These are set as `with:` parameters in the workflow step (not as secrets):
 | Input | Description |
 |-------|-------------|
 | `style-config-path` | _(Optional)_ Path to a Markdown style configuration file (`.md`) containing documentation style guidelines. If not set, auto-detects `.code-to-docs/style.md`. |
+
+### Versioning
+
+- `@v0` receives all backward-compatible updates (recommended)
+- `@v0.1.0` pins to an exact release
+- `@main` tracks unreleased changes and is not stable
 
 ### Supported Model Backends
 
