@@ -4,7 +4,7 @@ This document explains how to release new versions of the code-to-docs action.
 
 ## How It Works
 
-Pushing a semver tag triggers `.github/workflows/release.yml`, which:
+Pushing a semver tag triggers `.github/workflows/release.yaml`, which:
 
 1. Runs the full test suite (lint, format, tests with coverage)
 2. Extracts the release notes from `CHANGELOG.md`
