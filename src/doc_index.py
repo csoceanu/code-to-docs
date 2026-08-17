@@ -229,6 +229,21 @@ def _get_base_branch_ref():
     return f"origin/{base_branch}"
 
 
+def _get_effective_subfolder():
+    """Get the DOCS_SUBFOLDER for git pathspecs, accounting for CWD.
+
+    When CWD is already inside the docs subfolder (after
+    setup_docs_environment), the subfolder prefix must be omitted from
+    git ls-tree pathspecs because they are CWD-relative.
+    """
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+    if not docs_subfolder:
+        return ""
+    if Path(docs_subfolder).exists() and Path(docs_subfolder).is_dir():
+        return docs_subfolder
+    return ""
+
+
 def get_folder_doc_hashes_from_ref(folder, docs_root=None):
     """
     Get hashes of docs in a folder from the base branch git ref.
@@ -249,12 +264,12 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
         docs_root = get_docs_root()
 
     ref = _get_base_branch_ref()
-    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+    subfolder = _get_effective_subfolder()
 
     if folder == ROOT_LEVEL_FOLDER:
-        search_path = docs_subfolder or "."
+        search_path = subfolder or "."
     else:
-        search_path = f"{docs_subfolder}/{folder}" if docs_subfolder else folder
+        search_path = f"{subfolder}/{folder}" if subfolder else folder
 
     result = run_command_safe(
         ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
@@ -273,8 +288,8 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
             continue
 
         rel_to_docs = file_path
-        if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
-            rel_to_docs = file_path[len(docs_subfolder) + 1 :]
+        if subfolder and file_path.startswith(subfolder + "/"):
+            rel_to_docs = file_path[len(subfolder) + 1 :]
 
         parts = Path(rel_to_docs).parent.parts
         if any(p.startswith(".") or p.startswith("_") for p in parts):
@@ -428,12 +443,12 @@ def _get_docs_content_from_ref(folder):
     unavailable, empty list if folder has no doc files on the ref.
     """
     ref = _get_base_branch_ref()
-    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+    subfolder = _get_effective_subfolder()
 
     if folder == ROOT_LEVEL_FOLDER:
-        search_path = docs_subfolder or "."
+        search_path = subfolder or "."
     else:
-        search_path = f"{docs_subfolder}/{folder}" if docs_subfolder else folder
+        search_path = f"{subfolder}/{folder}" if subfolder else folder
 
     result = run_command_safe(
         ["git", "ls-tree", "-r", "--name-only", ref, "--", search_path],
@@ -452,8 +467,8 @@ def _get_docs_content_from_ref(folder):
             continue
 
         rel_to_docs = file_path
-        if docs_subfolder and file_path.startswith(docs_subfolder + "/"):
-            rel_to_docs = file_path[len(docs_subfolder) + 1 :]
+        if subfolder and file_path.startswith(subfolder + "/"):
+            rel_to_docs = file_path[len(subfolder) + 1 :]
 
         parts = Path(rel_to_docs).parent.parts
         if any(p.startswith(".") or p.startswith("_") for p in parts):

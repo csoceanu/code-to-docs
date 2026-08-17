@@ -326,9 +326,31 @@ class TestGetFolderDocHashesFromRef:
 
         assert result == {}
 
-    def test_handles_docs_subfolder(self, monkeypatch):
+    def test_handles_docs_subfolder(self, monkeypatch, tmp_path):
         monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        # Create the subfolder so _get_effective_subfolder detects we're NOT inside it
+        (tmp_path / "docs").mkdir()
+        monkeypatch.chdir(tmp_path)
         ls_output = "docs/commands/export.md\n"
+        file_content = b"export docs"
+
+        with (
+            patch("doc_index.run_command_safe") as mock_run,
+            patch("doc_index.subprocess.run") as mock_subprocess,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout=ls_output)
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout=file_content)
+            result = get_folder_doc_hashes_from_ref("commands")
+
+        assert result is not None
+        assert "commands/export.md" in result
+
+    def test_handles_docs_subfolder_from_inside(self, monkeypatch, tmp_path):
+        """When CWD is inside the docs subfolder, pathspecs omit the prefix."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        # CWD is inside docs/ — no "docs" directory relative to CWD
+        monkeypatch.chdir(tmp_path)
+        ls_output = "commands/export.md\n"
         file_content = b"export docs"
 
         with (
@@ -440,8 +462,10 @@ class TestGetDocsContentFromRef:
 
         assert result == []
 
-    def test_strips_docs_subfolder_from_path(self, monkeypatch):
+    def test_strips_docs_subfolder_from_path(self, monkeypatch, tmp_path):
         monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        (tmp_path / "docs").mkdir()
+        monkeypatch.chdir(tmp_path)
         ls_output = "docs/commands/export.md\n"
 
         call_count = [0]
