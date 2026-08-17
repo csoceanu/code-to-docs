@@ -308,7 +308,7 @@ def get_folder_doc_hashes_from_ref(folder, docs_root=None):
         # translation (\r\n → \n), breaking hash consistency for CRLF files.
         try:
             content_result = subprocess.run(
-                ["git", "cat-file", "blob", f"{ref}:{file_path}"],
+                ["git", "cat-file", "blob", f"{ref}:./{file_path}"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
@@ -482,7 +482,7 @@ def _get_docs_content_from_ref(folder):
                 continue
 
         content_result = run_command_safe(
-            ["git", "show", f"{ref}:{file_path}"],
+            ["git", "show", f"{ref}:./{file_path}"],
             check=False,
         )
         if content_result.returncode == 0 and content_result.stdout:

@@ -379,7 +379,7 @@ class TestGetFolderDocHashesFromRef:
         ls_call = mock_run.call_args_list[0].args[0]
         assert "origin/develop" in ls_call
         cat_call = mock_subprocess.call_args_list[0].args[0]
-        assert "origin/develop:guides/setup.md" in cat_call
+        assert "origin/develop:./guides/setup.md" in cat_call
 
     def test_root_level_folder_excludes_subdirectory_files(self, monkeypatch):
         from doc_index import ROOT_LEVEL_FOLDER
