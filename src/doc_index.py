@@ -242,11 +242,26 @@ def _get_effective_subfolder():
     docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
     if not docs_subfolder:
         return ""
+    should_log = not getattr(_get_effective_subfolder, "_logged", False)
     result = run_command_safe(["git", "rev-parse", "--show-prefix"], check=False)
     if result.returncode == 0:
         prefix = result.stdout.strip().rstrip("/")
         if prefix == docs_subfolder:
+            if should_log:
+                print(
+                    f"CWD inside DOCS_SUBFOLDER ({docs_subfolder}), omitting prefix from pathspecs"
+                )
+                _get_effective_subfolder._logged = True
             return ""
+        if should_log:
+            print(f"CWD prefix '{prefix}' != DOCS_SUBFOLDER '{docs_subfolder}', keeping prefix")
+            _get_effective_subfolder._logged = True
+    else:
+        if should_log:
+            print(
+                f"git rev-parse --show-prefix failed (rc={result.returncode}), using DOCS_SUBFOLDER"
+            )
+            _get_effective_subfolder._logged = True
     return docs_subfolder
 
 
@@ -673,6 +688,74 @@ def build_index_for_folder_with_retry(folder, client=None, max_retries=3):
     return _try_build()
 
 
+def remove_index(folder, docs_root=None):
+    """
+    Remove the index file for a folder.
+
+    Args:
+        folder: Folder name
+        docs_root: Optional root path for docs. If None, uses get_docs_root()
+
+    Returns:
+        bool: True if a file was removed, False if it didn't exist
+    """
+    if docs_root is None:
+        docs_root = get_docs_root()
+
+    index_file = Path(docs_root) / INDEX_DIR / f"{folder.replace('/', '-')}.index.md"
+    if index_file.exists():
+        index_file.unlink()
+        return True
+    return False
+
+
+def _handle_empty_folder_on_ref(folder, manifest, docs_root=None):
+    """
+    Handle a folder that needs reindexing but has no docs on the ref.
+
+    Safety checks:
+    - Verifies the base branch ref actually exists (not a stale/broken ref)
+    - Cross-checks disk: if the folder still has doc files on the working tree,
+      an empty ref result is more likely an environment bug than a real deletion
+
+    Returns:
+        bool: True if the stale index was cleaned up, False if skipped
+    """
+    if docs_root is None:
+        docs_root = get_docs_root()
+
+    ref = _get_base_branch_ref()
+    ref_exists = (
+        run_command_safe(["git", "rev-parse", "--verify", ref], check=False).returncode == 0
+    )
+    if not ref_exists:
+        print(f"⚠️ Ref {ref} does not exist, skipping cleanup for {folder}")
+        return False
+
+    ref_hashes = get_folder_doc_hashes_from_ref(folder, docs_root)
+    if ref_hashes is None or ref_hashes:
+        return False
+
+    disk_docs = get_docs_in_folder(folder, docs_root)
+    if disk_docs:
+        print(
+            f"⚠️ {folder} has {len(disk_docs)} doc(s) on disk but none on {ref} "
+            f"— possible ref mismatch, skipping index removal"
+        )
+        return False
+
+    removed = remove_index(folder, docs_root)
+    manifest["folders"][folder] = {
+        "built": datetime.now().isoformat(),
+        "doc_hashes": {},
+    }
+    if removed:
+        print(f"🗑️ Removed stale index for {folder} (docs deleted from ref)")
+    else:
+        print(f"📝 Updated manifest for {folder} (no docs on ref)")
+    return True
+
+
 def save_index(folder, index_content, docs_root=None):
     """
     Save index content to file.
@@ -789,8 +872,11 @@ def build_all_indexes(force=False):
                     results[folder] = "success"
                     print(f"✅ Built index for {folder}")
                 else:
-                    results[folder] = "empty"
-                    print(f"⚠️ No content for {folder}")
+                    if _handle_empty_folder_on_ref(folder, manifest):
+                        results[folder] = "removed"
+                    else:
+                        results[folder] = "empty"
+                        print(f"⚠️ No content for {folder}")
             except Exception as e:
                 results[folder] = f"error: {e}"
                 print(f"❌ Failed to build index for {folder}: {sanitize_output(str(e))}")
@@ -828,6 +914,9 @@ def update_indexes_if_needed():
                 }
                 updated_folders.append(folder)
                 print(f"✅ Updated index for {folder}")
+            else:
+                if _handle_empty_folder_on_ref(folder, manifest):
+                    updated_folders.append(folder)
 
     if updated_folders:
         save_manifest(manifest)
