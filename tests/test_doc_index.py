@@ -10,6 +10,7 @@ from doc_index import (
     INDEX_DIR,
     SUMMARIES_DIR,
     _get_docs_content_from_ref,
+    _get_effective_subfolder,
     _handle_empty_folder_on_ref,
     checkout_docs_from_base_branch,
     folder_needs_reindex,
@@ -289,6 +290,70 @@ class TestFolderNeedsReindex:
 
         with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=None):
             assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is False
+
+
+class TestGetEffectiveSubfolder:
+    @pytest.fixture(autouse=True)
+    def _reset_log_state(self):
+        yield
+        if hasattr(_get_effective_subfolder, "_last_msg"):
+            delattr(_get_effective_subfolder, "_last_msg")
+
+    def test_trailing_slash_normalized(self, monkeypatch):
+        """DOCS_SUBFOLDER with trailing slash should still match CWD prefix."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs/")
+        mock_result = MagicMock(returncode=0, stdout="docs/\n")
+        with patch("doc_index.run_command_safe", return_value=mock_result):
+            assert _get_effective_subfolder() == ""
+
+    def test_dot_slash_prefix_normalized(self, monkeypatch):
+        """DOCS_SUBFOLDER with ./ prefix should still match CWD prefix."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "./docs")
+        mock_result = MagicMock(returncode=0, stdout="docs/\n")
+        with patch("doc_index.run_command_safe", return_value=mock_result):
+            assert _get_effective_subfolder() == ""
+
+    def test_no_trailing_slash(self, monkeypatch):
+        """DOCS_SUBFOLDER without trailing slash matches normally."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        mock_result = MagicMock(returncode=0, stdout="docs/\n")
+        with patch("doc_index.run_command_safe", return_value=mock_result):
+            assert _get_effective_subfolder() == ""
+
+    def test_cwd_not_in_subfolder(self, monkeypatch):
+        """When CWD is not inside DOCS_SUBFOLDER, return the subfolder."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        mock_result = MagicMock(returncode=0, stdout="\n")
+        with patch("doc_index.run_command_safe", return_value=mock_result):
+            assert _get_effective_subfolder() == "docs"
+
+    def test_empty_subfolder(self, monkeypatch):
+        monkeypatch.setenv("DOCS_SUBFOLDER", "")
+        assert _get_effective_subfolder() == ""
+
+    def test_trailing_slash_pathspec_not_doubled(self, monkeypatch):
+        """The actual regression: trailing slash must not cause doubled pathspecs."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs/")
+        monkeypatch.setenv("DOCS_BASE_BRANCH", "main")
+
+        calls = []
+
+        def capture_run(cmd, **kwargs):
+            calls.append(cmd)
+            if "rev-parse" in cmd and "--show-prefix" in cmd:
+                return MagicMock(returncode=0, stdout="docs/\n")
+            if "rev-parse" in cmd and "--verify" in cmd:
+                return MagicMock(returncode=0)
+            if "ls-tree" in cmd:
+                return MagicMock(returncode=0, stdout="")
+            return MagicMock(returncode=0, stdout="")
+
+        with patch("doc_index.run_command_safe", side_effect=capture_run):
+            get_folder_doc_hashes_from_ref("commands")
+
+        ls_tree_calls = [c for c in calls if "ls-tree" in c]
+        assert len(ls_tree_calls) == 1
+        assert ls_tree_calls[0][-1] == "commands"
 
 
 class TestGetFolderDocHashesFromRef:
