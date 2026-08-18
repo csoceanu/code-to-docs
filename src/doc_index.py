@@ -239,7 +239,7 @@ def _get_effective_subfolder():
     Uses ``git rev-parse --show-prefix`` to determine CWD's position
     within the repo, avoiding filesystem heuristics.
     """
-    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "")
+    docs_subfolder = os.environ.get("DOCS_SUBFOLDER", "").strip().rstrip("/")
     if not docs_subfolder:
         return ""
     result = run_command_safe(["git", "rev-parse", "--show-prefix"], check=False)

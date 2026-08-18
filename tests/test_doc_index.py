@@ -10,6 +10,7 @@ from doc_index import (
     INDEX_DIR,
     SUMMARIES_DIR,
     _get_docs_content_from_ref,
+    _get_effective_subfolder,
     _handle_empty_folder_on_ref,
     checkout_docs_from_base_branch,
     folder_needs_reindex,
@@ -289,6 +290,40 @@ class TestFolderNeedsReindex:
 
         with patch("doc_index.get_folder_doc_hashes_from_ref", return_value=None):
             assert folder_needs_reindex("guides", manifest, docs_root=doc_tree) is False
+
+
+class TestGetEffectiveSubfolder:
+    def test_trailing_slash_normalized(self, monkeypatch):
+        """DOCS_SUBFOLDER with trailing slash should still match CWD prefix."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs/")
+        mock_result = MagicMock(returncode=0, stdout="docs/\n")
+        with patch("doc_index.run_command_safe", return_value=mock_result):
+            # Reset log dedup state
+            if hasattr(_get_effective_subfolder, "_last_msg"):
+                delattr(_get_effective_subfolder, "_last_msg")
+            assert _get_effective_subfolder() == ""
+
+    def test_no_trailing_slash(self, monkeypatch):
+        """DOCS_SUBFOLDER without trailing slash matches normally."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        mock_result = MagicMock(returncode=0, stdout="docs/\n")
+        with patch("doc_index.run_command_safe", return_value=mock_result):
+            if hasattr(_get_effective_subfolder, "_last_msg"):
+                delattr(_get_effective_subfolder, "_last_msg")
+            assert _get_effective_subfolder() == ""
+
+    def test_cwd_not_in_subfolder(self, monkeypatch):
+        """When CWD is not inside DOCS_SUBFOLDER, return the subfolder."""
+        monkeypatch.setenv("DOCS_SUBFOLDER", "docs")
+        mock_result = MagicMock(returncode=0, stdout="\n")
+        with patch("doc_index.run_command_safe", return_value=mock_result):
+            if hasattr(_get_effective_subfolder, "_last_msg"):
+                delattr(_get_effective_subfolder, "_last_msg")
+            assert _get_effective_subfolder() == "docs"
+
+    def test_empty_subfolder(self, monkeypatch):
+        monkeypatch.setenv("DOCS_SUBFOLDER", "")
+        assert _get_effective_subfolder() == ""
 
 
 class TestGetFolderDocHashesFromRef:
