@@ -36,7 +36,8 @@ if [ -n "$PR_HEAD_SHA" ]; then
 fi
 
 if [ -n "$DOCS_SUBFOLDER" ]; then
-  export DOCS_SUBFOLDER="$DOCS_SUBFOLDER"
+  DOCS_SUBFOLDER="${DOCS_SUBFOLDER%/}"
+  export DOCS_SUBFOLDER
 fi
 
 if [ -n "$COMMENT_BODY" ]; then
